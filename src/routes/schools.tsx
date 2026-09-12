@@ -5,8 +5,9 @@ import {
   Plus, X, Building2, MapPin, Users, Briefcase,
   AlertCircle, Pencil, Phone, Mail, CreditCard, CheckCircle2, Eye, EyeOff,
 } from "lucide-react";
-import { getSchoolWithLocations, addBranch, updateSchool, updateBranch, updateSchoolLogo, saveRazorpayKeys, getSchoolPaymentSettings } from "@/lib/auth";
+import { getSchoolWithLocations, addBranch, updateSchool, updateBranch, updateSchoolLogo, saveRazorpayKeys, getSchoolPaymentSettings, getSchoolSubscriptionBilling, createPlatformRazorpayOrder, verifyPlatformRazorpayPayment } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
+import { fmtDate } from "@/lib/utils";
 import { PlanLimitDialog, parsePlanLimitError } from "@/components/plan-limit-dialog";
 
 export const Route = createFileRoute("/schools")({
@@ -405,6 +406,163 @@ function RazorpaySettings({ schoolId }: { schoolId: number }) {
   );
 }
 
+function loadRazorpayScript(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if ((window as any).Razorpay) { resolve(true); return; }
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
+
+type BillingData = any;
+
+function SubscriptionBilling({ schoolId }: { schoolId: number }) {
+  const getBillingFn = useServerFn(getSchoolSubscriptionBilling);
+  const createOrderFn = useServerFn(createPlatformRazorpayOrder);
+  const verifyFn = useServerFn(verifyPlatformRazorpayPayment);
+  const [data, setData] = useState<BillingData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [paying, setPaying] = useState(false);
+  const [error, setError] = useState("");
+
+  const load = () => {
+    setLoading(true);
+    setError("");
+    getBillingFn()
+      .then((d) => setData(d as BillingData))
+      .catch((e) => setError(e?.message ?? "Failed to load billing"))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, [schoolId]);
+
+  const handlePayNow = async () => {
+    if (!data?.subscription || Number(data.subscription.amount ?? 0) <= 0) return;
+    setPaying(true); setError("");
+    try {
+      const loaded = await loadRazorpayScript();
+      if (!loaded) throw new Error("Failed to load Razorpay. Check your internet.");
+
+      const order = await createOrderFn({ data: { subscriptionId: data.subscription.id } }) as {
+        orderId: string; amount: number; keyId: string; subscriptionPaymentId: number;
+      };
+
+      await new Promise<void>((resolve, reject) => {
+        const rzp = new (window as any).Razorpay({
+          key: order.keyId,
+          amount: order.amount,
+          currency: data.subscription.currency ?? "INR",
+          order_id: order.orderId,
+          name: "KinderDesk",
+          description: `${data.subscription.plan ?? data.school.plan} subscription - ${data.subscription.billingCycle ?? "monthly"}`,
+          prefill: { email: data.school.email ?? "" },
+          theme: { color: "#2563eb" },
+          handler: async (response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => {
+            try {
+              await verifyFn({
+                data: {
+                  subscriptionPaymentId: order.subscriptionPaymentId,
+                  razorpayOrderId: response.razorpay_order_id,
+                  razorpayPaymentId: response.razorpay_payment_id,
+                  razorpaySignature: response.razorpay_signature,
+                },
+              });
+              await load();
+              resolve();
+            } catch (err: any) { reject(err); }
+          },
+          modal: { ondismiss: () => reject(new Error("Payment cancelled")) },
+        });
+        rzp.open();
+      });
+    } catch (err: any) {
+      if (err?.message !== "Payment cancelled") setError(err?.message ?? "Payment failed");
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  if (loading) return (
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 h-40 animate-pulse" />
+  );
+
+  if (error) return (
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+      <div className="flex items-center gap-2 text-red-600 text-sm"><AlertCircle className="w-4 h-4" /> {error}</div>
+    </div>
+  );
+
+  const sub = data?.subscription;
+  const amount = Number(sub?.amount ?? 0);
+  if (!sub || amount <= 0) return (
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="h-1.5 bg-gradient-to-r from-violet-500 to-fuchsia-500" />
+      <div className="p-6">
+        <h2 className="text-sm font-bold text-slate-800 mb-1">Subscription</h2>
+        <p className="text-sm text-slate-500">You are on a free or unpriced plan. No payment is required.</p>
+      </div>
+    </div>
+  );
+
+  const currency = sub.currency ?? "INR";
+  const symbol = currency === "INR" ? "₹" : currency;
+  const isExpired = sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd) < new Date() : true;
+  const periodLabel = sub.billingCycle === "monthly" ? "/ month" : sub.billingCycle === "yearly" ? "/ year" : "";
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="h-1.5 bg-gradient-to-r from-violet-500 to-fuchsia-500" />
+      <div className="p-6 space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-sm font-bold text-slate-800 mb-1 flex items-center gap-2">
+              <CreditCard className="w-4 h-4 text-violet-600" /> Subscription Billing
+            </h2>
+            <p className="text-sm text-slate-500">Manage your KinderDesk plan payment</p>
+          </div>
+          <span className={`text-xs font-bold px-2.5 py-1 rounded-full border capitalize ${sub.status === "active" && !isExpired ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
+            {sub.status === "active" && !isExpired ? "Active" : isExpired ? "Expired" : "Pending"}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+            <div className="text-xs text-slate-500 mb-1">Plan</div>
+            <div className="text-base font-bold text-slate-800 capitalize">{sub.plan ?? data.school.plan ?? "—"}</div>
+          </div>
+          <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+            <div className="text-xs text-slate-500 mb-1">Amount</div>
+            <div className="text-base font-bold text-slate-800">{symbol}{amount.toLocaleString("en-IN")}{periodLabel}</div>
+          </div>
+          <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+            <div className="text-xs text-slate-500 mb-1">Current period ends</div>
+            <div className="text-base font-bold text-slate-800">{sub.currentPeriodEnd ? fmtDate(new Date(sub.currentPeriodEnd)) : "—"}</div>
+          </div>
+        </div>
+
+        <button
+          onClick={handlePayNow}
+          disabled={paying}
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-400 text-white text-sm font-bold rounded-xl transition"
+        >
+          {paying ? (
+            <>Processing…</>
+          ) : (
+            <><CreditCard className="w-4 h-4" /> Pay {symbol}{amount.toLocaleString("en-IN")} now</>
+          )}
+        </button>
+
+        <p className="text-xs text-slate-400">
+          Payments are processed securely by Razorpay in the platform account. You will receive a receipt after successful payment.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function SchoolsPage() {
   const { tenant } = useTenant();
   const getFn = useServerFn(getSchoolWithLocations);
@@ -623,6 +781,9 @@ function SchoolsPage() {
           </div>
         )}
       </div>
+
+      {/* Platform Subscription Billing */}
+      {school && <SubscriptionBilling schoolId={school.id} />}
 
       {/* Razorpay Payment Settings */}
       {school && <RazorpaySettings schoolId={school.id} />}

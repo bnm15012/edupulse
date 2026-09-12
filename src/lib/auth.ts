@@ -6883,3 +6883,152 @@ export const getReportCardData = createServerFn({ method: "GET" })
     };
   });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PLATFORM RAZORPAY — school subscription billing
+// ─────────────────────────────────────────────────────────────────────────────
+
+function getPlatformRazorpayKeys() {
+  const keyId = process.env.RAZORPAY_KEY_ID;
+  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+  if (!keyId || !keySecret) throw new Error("Platform Razorpay is not configured");
+  return { keyId, keySecret };
+}
+
+export const getSchoolSubscriptionBilling = createServerFn({ method: "GET" }).handler(async () => {
+  const userId = await requireSession();
+  const { db } = await import("@/lib/db");
+  const { users, schools, subscriptions, plans } = await import("@/lib/db/schema");
+
+  const [me] = await db.select({ schoolId: users.schoolId, role: users.role }).from(users).where(eq(users.id, userId)).limit(1);
+  if (!me) throw new Error("Not authenticated");
+  if (me.role !== "school_admin" && me.role !== "super_admin") throw new Error("Not authorized");
+
+  const [school] = await db.select({
+    id: schools.id,
+    name: schools.name,
+    email: schools.email,
+    plan: schools.plan,
+    status: schools.status,
+  }).from(schools).where(eq(schools.id, me.schoolId)).limit(1);
+  if (!school) throw new Error("School not found");
+
+  const [sub] = await db.select().from(subscriptions).where(eq(subscriptions.schoolId, school.id)).limit(1);
+  const [plan] = sub ? await db.select({ name: plans.name, price: plans.price, period: plans.period }).from(plans).where(eq(plans.id, sub.planId)).limit(1) : [null];
+
+  return { school, subscription: sub ?? null, plan };
+});
+
+const createPlatformRazorpayOrderSchema = z.object({
+  subscriptionId: z.number(),
+});
+
+export const createPlatformRazorpayOrder = createServerFn({ method: "POST" })
+  .validator((input: unknown) => createPlatformRazorpayOrderSchema.parse(input))
+  .handler(async ({ data }) => {
+    const userId = await requireSession();
+    const { db } = await import("@/lib/db");
+    const { users, subscriptions, subscriptionPayments } = await import("@/lib/db/schema");
+
+    const [me] = await db.select({ schoolId: users.schoolId, role: users.role }).from(users).where(eq(users.id, userId)).limit(1);
+    if (!me) throw new Error("Not authenticated");
+    if (me.role !== "school_admin" && me.role !== "super_admin") throw new Error("Not authorized");
+
+    const [sub] = await db.select().from(subscriptions)
+      .where(and(eq(subscriptions.id, data.subscriptionId), eq(subscriptions.schoolId, me.schoolId)))
+      .limit(1);
+    if (!sub) throw new Error("Subscription not found");
+
+    const amount = Number(sub.amount ?? 0);
+    if (amount <= 0) throw new Error("This subscription is free — no payment needed");
+
+    const { keyId, keySecret } = getPlatformRazorpayKeys();
+    const amountPaise = Math.round(amount * 100);
+    const authHeader = `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString("base64")}`;
+
+    const [paymentRow] = await db.insert(subscriptionPayments).values({
+      schoolId: me.schoolId,
+      subscriptionId: sub.id,
+      amount: String(amount),
+      currency: sub.currency ?? "INR",
+      status: "pending",
+    });
+    const subscriptionPaymentId = Number((paymentRow as any).insertId);
+
+    const res = await fetch("https://api.razorpay.com/v1/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: authHeader },
+      body: JSON.stringify({
+        amount: amountPaise,
+        currency: sub.currency ?? "INR",
+        receipt: `sub_${subscriptionPaymentId}`,
+        notes: { subscriptionPaymentId: subscriptionPaymentId, subscriptionId: sub.id },
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      await db.delete(subscriptionPayments).where(eq(subscriptionPayments.id, subscriptionPaymentId));
+      throw new Error(`Razorpay order creation failed: ${err}`);
+    }
+
+    const order = await res.json() as { id: string };
+    await db.update(subscriptionPayments).set({ razorpayOrderId: order.id }).where(eq(subscriptionPayments.id, subscriptionPaymentId));
+
+    return { orderId: order.id, amount: amountPaise, keyId, subscriptionPaymentId };
+  });
+
+const verifyPlatformRazorpayPaymentSchema = z.object({
+  subscriptionPaymentId: z.number(),
+  razorpayOrderId: z.string(),
+  razorpayPaymentId: z.string(),
+  razorpaySignature: z.string(),
+});
+
+export const verifyPlatformRazorpayPayment = createServerFn({ method: "POST" })
+  .validator((input: unknown) => verifyPlatformRazorpayPaymentSchema.parse(input))
+  .handler(async ({ data }) => {
+    const { db } = await import("@/lib/db");
+    const { subscriptionPayments, subscriptions } = await import("@/lib/db/schema");
+
+    const [payment] = await db.select().from(subscriptionPayments).where(eq(subscriptionPayments.id, data.subscriptionPaymentId)).limit(1);
+    if (!payment) throw new Error("Payment record not found");
+    if (payment.razorpayOrderId && payment.razorpayOrderId !== data.razorpayOrderId) {
+      throw new Error("Order ID mismatch");
+    }
+
+    const { keySecret } = getPlatformRazorpayKeys();
+    const { createHmac } = await import("node:crypto");
+    const expectedSig = createHmac("sha256", keySecret)
+      .update(`${data.razorpayOrderId}|${data.razorpayPaymentId}`)
+      .digest("hex");
+
+    if (expectedSig !== data.razorpaySignature) {
+      throw new Error("Payment signature verification failed");
+    }
+
+    const now = new Date();
+    await db.update(subscriptionPayments).set({
+      status: "captured",
+      paidAt: now,
+      razorpayOrderId: data.razorpayOrderId,
+      razorpayPaymentId: data.razorpayPaymentId,
+    }).where(eq(subscriptionPayments.id, data.subscriptionPaymentId));
+
+    const [sub] = await db.select().from(subscriptions).where(eq(subscriptions.id, payment.subscriptionId)).limit(1);
+    if (sub) {
+      const periodStart = sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd) : now;
+      const periodEnd = new Date(periodStart);
+      if (sub.billingCycle === "yearly") periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+      else if (sub.billingCycle === "monthly") periodEnd.setMonth(periodEnd.getMonth() + 1);
+      else if (sub.billingCycle === "lifetime") periodEnd.setFullYear(periodEnd.getFullYear() + 100);
+
+      await db.update(subscriptions).set({
+        status: "active",
+        currentPeriodStart: periodStart,
+        currentPeriodEnd: periodEnd,
+      }).where(eq(subscriptions.id, sub.id));
+    }
+
+    return { ok: true };
+  });
+
