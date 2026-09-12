@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
   BookOpen, Clock, Plus, X, Pencil, Trash2, Save,
-  AlertCircle, Loader2, CheckCircle2, GraduationCap, Award, SlidersHorizontal,
+  AlertCircle, Loader2, CheckCircle2, GraduationCap, Award, SlidersHorizontal, ChevronDown, ChevronRight,
 } from "lucide-react";
 import {
   manageSubject, listSubjects, deleteSubject,
@@ -30,7 +30,7 @@ const inputCls = "w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-5
 function AcademicsPage() {
   const { tenant } = useTenant();
   const toast = useToast();
-  const [activeTab, setActiveTab] = useState<"subjects" | "classes" | "timetable" | "grading">("subjects");
+  const [activeTab, setActiveTab] = useState<"subjects" | "timetable" | "grading">("subjects");
 
   // Server fns
   const manageSubjectFn = useServerFn(manageSubject);
@@ -58,9 +58,12 @@ function AcademicsPage() {
   const [subjectForm, setSubjectForm] = useState<{ id?: number; name: string; code: string } | null>(null);
   const [savingSubject, setSavingSubject] = useState(false);
 
-  // Class subjects
+  // Class subjects (merged into subjects tab)
   const [selectedClass, setSelectedClass] = useState<number>(0);
   const [classSubjectIds, setClassSubjectIds] = useState<number[]>([]);
+  const [expandedClassId, setExpandedClassId] = useState<number | null>(null);
+  const [classSubjectsMap, setClassSubjectsMap] = useState<Record<number, number[]>>({});
+  const [savingClassSubjects, setSavingClassSubjects] = useState<number | null>(null);
 
   // Timetable
   const [tt, setTt] = useState<TT[]>([]);
@@ -88,11 +91,7 @@ function AcademicsPage() {
     }
   }, [activeTab, tenant, schoolBoard]);
 
-  useEffect(() => {
-    if (activeTab === "classes" && selectedClass) {
-      getClassSubjectsFn({ data: { classId: selectedClass } }).then((d: any) => setClassSubjectIds(d.map((x: any) => x.subjectId)));
-    }
-  }, [activeTab, selectedClass]);
+  // class subjects are now loaded on-demand when a class row is expanded
 
   useEffect(() => {
     if (activeTab === "timetable" && selectedClass) {
@@ -109,7 +108,6 @@ function AcademicsPage() {
       <div className="flex gap-2 border-b border-slate-200">
         {([
           { key: "subjects", label: "Subjects", icon: BookOpen },
-          { key: "classes", label: "Class Subjects", icon: GraduationCap },
           { key: "timetable", label: "Timetable", icon: Clock },
           { key: "grading", label: "Board & Grading", icon: Award },
         ] as any[]).map(({ key, label, icon: Icon }) => (
@@ -125,94 +123,148 @@ function AcademicsPage() {
         ))}
       </div>
 
-      {/* Subjects */}
+      {/* Subjects + Class Subjects (merged) */}
       {activeTab === "subjects" && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-bold text-slate-800">Subjects</h2>
-            <button onClick={() => setSubjectForm({ name: "", code: "" })} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition">
-              <Plus className="w-3.5 h-3.5" /> Add
-            </button>
-          </div>
-
-          <div className="space-y-2">
-            {subjectForm && (
-              <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
-                <div className="flex-1 min-w-0">
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">Name *</label>
-                  <input value={subjectForm.name} onChange={(e) => setSubjectForm({ ...subjectForm, name: e.target.value })} className={inputCls} placeholder="e.g. Mathematics" />
-                </div>
-                <div className="w-32">
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">Code</label>
-                  <input value={subjectForm.code} onChange={(e) => setSubjectForm({ ...subjectForm, code: e.target.value })} className={inputCls} placeholder="e.g. MATH" />
-                </div>
-                <div className="flex items-center gap-2 self-end">
-                  <button onClick={() => setSubjectForm(null)} className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg border border-red-200 text-red-600 bg-red-50 text-xs font-semibold transition hover:bg-red-100">
-                    <X className="w-3.5 h-3.5" /> Cancel
-                  </button>
-                  <button disabled={savingSubject || !subjectForm.name} onClick={async () => {
-                    setSavingSubject(true);
-                    try {
-                      await manageSubjectFn({ data: { id: subjectForm.id, name: subjectForm.name, code: subjectForm.code } });
-                      setSubjectForm(null);
-                      const d = await listSubjectsFn({ data: { schoolId: tenant.schoolId } });
-                      setSubjects(d as Subject[]);
-                      toast("Subject saved", "success");
-                    } catch (err: any) { toast(err?.message ?? "Save failed", "error"); }
-                    finally { setSavingSubject(false); }
-                  }} className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white text-xs font-semibold transition">
-                    <Save className="w-3.5 h-3.5" /> {savingSubject ? "Saving…" : "Save"}
-                  </button>
-                </div>
+        <div className="space-y-6">
+          {/* Global subjects list */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-base font-bold text-slate-800">Subjects</h2>
+                <p className="text-xs text-slate-400 mt-0.5">School-wide subject library. Assign them to classes below.</p>
               </div>
-            )}
-
-            {subjects.map((s) => (
-              <div key={s.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">{s.name}</p>
-                  {s.code && <p className="text-xs text-slate-400">{s.code}</p>}
-                </div>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => setSubjectForm({ id: s.id, name: s.name, code: s.code ?? "" })} className="p-1.5 text-blue-500 hover:text-blue-700"><Pencil className="w-3.5 h-3.5" /></button>
-                  <button onClick={async () => {
-                    if (!confirm("Delete this subject?")) return;
-                    await deleteSubjectFn({ data: { id: s.id } });
-                    setSubjects((p) => p.filter((x) => x.id !== s.id));
-                  }} className="p-1.5 text-red-500 hover:text-red-700"><Trash2 className="w-3.5 h-3.5" /></button>
-                </div>
-              </div>
-            ))}
-            {subjects.length === 0 && !subjectForm && <p className="text-sm text-slate-400 text-center py-8">No subjects yet</p>}
-          </div>
-        </div>
-      )}
-
-      {/* Class subjects */}
-      {activeTab === "classes" && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h2 className="text-base font-bold text-slate-800 mb-4">Class-Subject Assignment</h2>
-          <select value={selectedClass} onChange={(e) => setSelectedClass(Number(e.target.value))} className={inputCls + " mb-4 bg-white"}>
-            <option value={0}>— select class —</option>
-            {classes.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.ageGroup})</option>)}
-          </select>
-
-          {selectedClass > 0 && (
-            <div className="space-y-2">
-              {subjects.map((s) => (
-                <label key={s.id} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                  <input type="checkbox" checked={classSubjectIds.includes(s.id)} onChange={(e) => {
-                    setClassSubjectIds((prev) => e.target.checked ? [...prev, s.id] : prev.filter((id) => id !== s.id));
-                  }} className="w-4 h-4 text-blue-600 rounded" />
-                  <span className="text-sm text-slate-800">{s.name}</span>
-                </label>
-              ))}
-              <button onClick={async () => {
-                await setClassSubjectsFn({ data: { classId: selectedClass, subjectIds: classSubjectIds } });
-                toast("Saved", "success");
-              }} className="mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg">Save class subjects</button>
+              <button onClick={() => setSubjectForm({ name: "", code: "" })} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition">
+                <Plus className="w-3.5 h-3.5" /> Add subject
+              </button>
             </div>
-          )}
+
+            <div className="space-y-2">
+              {subjectForm && (
+                <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <div className="flex-1 min-w-0">
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Name *</label>
+                    <input value={subjectForm.name} onChange={(e) => setSubjectForm({ ...subjectForm, name: e.target.value })} className={inputCls} placeholder="e.g. Mathematics" />
+                  </div>
+                  <div className="w-32">
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Code</label>
+                    <input value={subjectForm.code} onChange={(e) => setSubjectForm({ ...subjectForm, code: e.target.value })} className={inputCls} placeholder="e.g. MATH" />
+                  </div>
+                  <div className="flex items-center gap-2 self-end">
+                    <button onClick={() => setSubjectForm(null)} className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg border border-red-200 text-red-600 bg-red-50 text-xs font-semibold transition hover:bg-red-100">
+                      <X className="w-3.5 h-3.5" /> Cancel
+                    </button>
+                    <button disabled={savingSubject || !subjectForm.name} onClick={async () => {
+                      setSavingSubject(true);
+                      try {
+                        await manageSubjectFn({ data: { id: subjectForm.id, name: subjectForm.name, code: subjectForm.code } });
+                        setSubjectForm(null);
+                        const d = await listSubjectsFn({ data: { schoolId: tenant.schoolId } });
+                        setSubjects(d as Subject[]);
+                        toast("Subject saved", "success");
+                      } catch (err: any) { toast(err?.message ?? "Save failed", "error"); }
+                      finally { setSavingSubject(false); }
+                    }} className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white text-xs font-semibold transition">
+                      <Save className="w-3.5 h-3.5" /> {savingSubject ? "Saving…" : "Save"}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {subjects.map((s) => (
+                <div key={s.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">{s.name}</p>
+                    {s.code && <p className="text-xs text-slate-400">{s.code}</p>}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => setSubjectForm({ id: s.id, name: s.name, code: s.code ?? "" })} className="p-1.5 text-blue-500 hover:text-blue-700"><Pencil className="w-3.5 h-3.5" /></button>
+                    <button onClick={async () => {
+                      if (!confirm("Delete this subject?")) return;
+                      await deleteSubjectFn({ data: { id: s.id } });
+                      setSubjects((p) => p.filter((x) => x.id !== s.id));
+                    }} className="p-1.5 text-red-500 hover:text-red-700"><Trash2 className="w-3.5 h-3.5" /></button>
+                  </div>
+                </div>
+              ))}
+              {subjects.length === 0 && !subjectForm && <p className="text-sm text-slate-400 text-center py-8">No subjects yet. Add one above.</p>}
+            </div>
+          </div>
+
+          {/* Per-class subject assignment */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100">
+              <h2 className="text-base font-bold text-slate-800">Class Subjects</h2>
+              <p className="text-xs text-slate-400 mt-0.5">Click a class to assign subjects to it.</p>
+            </div>
+            {classes.length === 0 && <p className="text-sm text-slate-400 text-center py-8">No classes found.</p>}
+            {classes.map((c) => {
+              const isOpen = expandedClassId === c.id;
+              return (
+                <div key={c.id} className="border-b border-slate-100 last:border-0">
+                  <button
+                    className="w-full flex items-center justify-between px-6 py-4 hover:bg-slate-50 transition text-left"
+                    onClick={async () => {
+                      if (isOpen) { setExpandedClassId(null); return; }
+                      setExpandedClassId(c.id);
+                      if (!classSubjectsMap[c.id]) {
+                        const d = await getClassSubjectsFn({ data: { classId: c.id } });
+                        setClassSubjectsMap((prev) => ({ ...prev, [c.id]: (d as any[]).map((x) => x.subjectId) }));
+                      }
+                    }}
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">{c.name}</p>
+                      <p className="text-xs text-slate-400">{c.ageGroup}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {classSubjectsMap[c.id] !== undefined && (
+                        <span className="text-xs text-slate-500">{classSubjectsMap[c.id].length} subject{classSubjectsMap[c.id].length !== 1 ? "s" : ""}</span>
+                      )}
+                      {isOpen ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+                    </div>
+                  </button>
+
+                  {isOpen && (
+                    <div className="px-6 pb-4 bg-slate-50 border-t border-slate-100">
+                      <div className="pt-3 space-y-2">
+                        {subjects.map((s) => (
+                          <label key={s.id} className="flex items-center gap-3 p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-blue-50 cursor-pointer transition">
+                            <input
+                              type="checkbox"
+                              checked={(classSubjectsMap[c.id] ?? []).includes(s.id)}
+                              onChange={(e) => {
+                                setClassSubjectsMap((prev) => {
+                                  const cur = prev[c.id] ?? [];
+                                  return { ...prev, [c.id]: e.target.checked ? [...cur, s.id] : cur.filter((id) => id !== s.id) };
+                                });
+                              }}
+                              className="w-4 h-4 text-blue-600 rounded"
+                            />
+                            <span className="text-sm text-slate-800">{s.name}</span>
+                            {s.code && <span className="text-xs text-slate-400">({s.code})</span>}
+                          </label>
+                        ))}
+                        {subjects.length === 0 && <p className="text-xs text-slate-400">No subjects in library yet.</p>}
+                        <button
+                          disabled={savingClassSubjects === c.id}
+                          onClick={async () => {
+                            setSavingClassSubjects(c.id);
+                            try {
+                              await setClassSubjectsFn({ data: { classId: c.id, subjectIds: classSubjectsMap[c.id] ?? [] } });
+                              toast(`${c.name} subjects saved`, "success");
+                            } catch { toast("Save failed", "error"); }
+                            finally { setSavingClassSubjects(null); }
+                          }}
+                          className="mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-xs font-semibold rounded-lg transition"
+                        >
+                          {savingClassSubjects === c.id ? "Saving…" : "Save"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
