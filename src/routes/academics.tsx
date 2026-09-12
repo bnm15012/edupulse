@@ -58,12 +58,17 @@ function AcademicsPage() {
   const [subjectForm, setSubjectForm] = useState<{ id?: number; name: string; code: string } | null>(null);
   const [savingSubject, setSavingSubject] = useState(false);
 
-  // Class subjects (merged into subjects tab)
+  // Class subjects — per-class expanded view with inline add
   const [selectedClass, setSelectedClass] = useState<number>(0);
   const [classSubjectIds, setClassSubjectIds] = useState<number[]>([]);
   const [expandedClassId, setExpandedClassId] = useState<number | null>(null);
-  const [classSubjectsMap, setClassSubjectsMap] = useState<Record<number, number[]>>({});
-  const [savingClassSubjects, setSavingClassSubjects] = useState<number | null>(null);
+  // classSubjectsMap: classId -> full subject objects assigned to that class
+  type ClassSubject = { id: number; name: string; code: string | null };
+  const [classSubjectsMap, setClassSubjectsMap] = useState<Record<number, ClassSubject[]>>({});
+  const [addingSubjectForClass, setAddingSubjectForClass] = useState<number | null>(null);
+  const [newSubjectForm, setNewSubjectForm] = useState<{ name: string; code: string }>({ name: "", code: "" });
+  const [savingNewSubject, setSavingNewSubject] = useState(false);
+  const [removingSubjectId, setRemovingSubjectId] = useState<number | null>(null);
 
   // Timetable
   const [tt, setTt] = useState<TT[]>([]);
@@ -123,148 +128,141 @@ function AcademicsPage() {
         ))}
       </div>
 
-      {/* Subjects + Class Subjects (merged) */}
+      {/* Subjects — class-centric view */}
       {activeTab === "subjects" && (
-        <div className="space-y-6">
-          {/* Global subjects list */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-base font-bold text-slate-800">Subjects</h2>
-                <p className="text-xs text-slate-400 mt-0.5">School-wide subject library. Assign them to classes below.</p>
-              </div>
-              <button onClick={() => setSubjectForm({ name: "", code: "" })} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition">
-                <Plus className="w-3.5 h-3.5" /> Add subject
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              {subjectForm && (
-                <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
-                  <div className="flex-1 min-w-0">
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">Name *</label>
-                    <input value={subjectForm.name} onChange={(e) => setSubjectForm({ ...subjectForm, name: e.target.value })} className={inputCls} placeholder="e.g. Mathematics" />
-                  </div>
-                  <div className="w-32">
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">Code</label>
-                    <input value={subjectForm.code} onChange={(e) => setSubjectForm({ ...subjectForm, code: e.target.value })} className={inputCls} placeholder="e.g. MATH" />
-                  </div>
-                  <div className="flex items-center gap-2 self-end">
-                    <button onClick={() => setSubjectForm(null)} className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg border border-red-200 text-red-600 bg-red-50 text-xs font-semibold transition hover:bg-red-100">
-                      <X className="w-3.5 h-3.5" /> Cancel
-                    </button>
-                    <button disabled={savingSubject || !subjectForm.name} onClick={async () => {
-                      setSavingSubject(true);
-                      try {
-                        await manageSubjectFn({ data: { id: subjectForm.id, name: subjectForm.name, code: subjectForm.code } });
-                        setSubjectForm(null);
-                        const d = await listSubjectsFn({ data: { schoolId: tenant.schoolId } });
-                        setSubjects(d as Subject[]);
-                        toast("Subject saved", "success");
-                      } catch (err: any) { toast(err?.message ?? "Save failed", "error"); }
-                      finally { setSavingSubject(false); }
-                    }} className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white text-xs font-semibold transition">
-                      <Save className="w-3.5 h-3.5" /> {savingSubject ? "Saving…" : "Save"}
-                    </button>
-                  </div>
-                </div>
-              )}
-              {subjects.map((s) => (
-                <div key={s.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100">
+            <h2 className="text-base font-bold text-slate-800">Subjects by Class</h2>
+            <p className="text-xs text-slate-400 mt-0.5">Click a class to view and manage its subjects.</p>
+          </div>
+          {classes.length === 0 && <p className="text-sm text-slate-400 text-center py-8">No classes found. Add classes first.</p>}
+          {classes.map((c) => {
+            const isOpen = expandedClassId === c.id;
+            const csubs = classSubjectsMap[c.id] ?? [];
+            const isAddingHere = addingSubjectForClass === c.id;
+            return (
+              <div key={c.id} className="border-b border-slate-100 last:border-0">
+                {/* Class row header */}
+                <button
+                  className="w-full flex items-center justify-between px-6 py-4 hover:bg-slate-50 transition text-left"
+                  onClick={async () => {
+                    if (isOpen) { setExpandedClassId(null); setAddingSubjectForClass(null); return; }
+                    setExpandedClassId(c.id);
+                    if (!classSubjectsMap[c.id]) {
+                      const d = await getClassSubjectsFn({ data: { classId: c.id } });
+                      setClassSubjectsMap((prev) => ({ ...prev, [c.id]: (d as any[]).map((x) => ({ id: x.subjectId, name: x.name, code: x.code })) }));
+                    }
+                  }}
+                >
                   <div>
-                    <p className="text-sm font-semibold text-slate-800">{s.name}</p>
-                    {s.code && <p className="text-xs text-slate-400">{s.code}</p>}
+                    <p className="text-sm font-semibold text-slate-800">{c.name}</p>
+                    <p className="text-xs text-slate-400">{c.ageGroup}</p>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => setSubjectForm({ id: s.id, name: s.name, code: s.code ?? "" })} className="p-1.5 text-blue-500 hover:text-blue-700"><Pencil className="w-3.5 h-3.5" /></button>
-                    <button onClick={async () => {
-                      if (!confirm("Delete this subject?")) return;
-                      await deleteSubjectFn({ data: { id: s.id } });
-                      setSubjects((p) => p.filter((x) => x.id !== s.id));
-                    }} className="p-1.5 text-red-500 hover:text-red-700"><Trash2 className="w-3.5 h-3.5" /></button>
+                  <div className="flex items-center gap-3">
+                    {classSubjectsMap[c.id] !== undefined && (
+                      <span className="text-xs text-slate-500">{csubs.length} subject{csubs.length !== 1 ? "s" : ""}</span>
+                    )}
+                    {isOpen ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
                   </div>
-                </div>
-              ))}
-              {subjects.length === 0 && !subjectForm && <p className="text-sm text-slate-400 text-center py-8">No subjects yet. Add one above.</p>}
-            </div>
-          </div>
+                </button>
 
-          {/* Per-class subject assignment */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100">
-              <h2 className="text-base font-bold text-slate-800">Class Subjects</h2>
-              <p className="text-xs text-slate-400 mt-0.5">Click a class to assign subjects to it.</p>
-            </div>
-            {classes.length === 0 && <p className="text-sm text-slate-400 text-center py-8">No classes found.</p>}
-            {classes.map((c) => {
-              const isOpen = expandedClassId === c.id;
-              return (
-                <div key={c.id} className="border-b border-slate-100 last:border-0">
-                  <button
-                    className="w-full flex items-center justify-between px-6 py-4 hover:bg-slate-50 transition text-left"
-                    onClick={async () => {
-                      if (isOpen) { setExpandedClassId(null); return; }
-                      setExpandedClassId(c.id);
-                      if (!classSubjectsMap[c.id]) {
-                        const d = await getClassSubjectsFn({ data: { classId: c.id } });
-                        setClassSubjectsMap((prev) => ({ ...prev, [c.id]: (d as any[]).map((x) => x.subjectId) }));
-                      }
-                    }}
-                  >
-                    <div>
-                      <p className="text-sm font-semibold text-slate-800">{c.name}</p>
-                      <p className="text-xs text-slate-400">{c.ageGroup}</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {classSubjectsMap[c.id] !== undefined && (
-                        <span className="text-xs text-slate-500">{classSubjectsMap[c.id].length} subject{classSubjectsMap[c.id].length !== 1 ? "s" : ""}</span>
+                {/* Expanded content */}
+                {isOpen && (
+                  <div className="px-6 pb-5 bg-slate-50 border-t border-slate-100">
+                    <div className="pt-3 space-y-2">
+                      {/* Existing subjects */}
+                      {csubs.map((s) => (
+                        <div key={s.id} className="flex items-center justify-between px-4 py-2.5 rounded-xl border border-slate-200 bg-white">
+                          <div>
+                            <span className="text-sm font-medium text-slate-800">{s.name}</span>
+                            {s.code && <span className="ml-2 text-xs text-slate-400">({s.code})</span>}
+                          </div>
+                          <button
+                            disabled={removingSubjectId === s.id}
+                            onClick={async () => {
+                              if (!confirm(`Remove ${s.name} from ${c.name}?`)) return;
+                              setRemovingSubjectId(s.id);
+                              try {
+                                const remaining = csubs.filter((x) => x.id !== s.id);
+                                await setClassSubjectsFn({ data: { classId: c.id, subjectIds: remaining.map((x) => x.id) } });
+                                setClassSubjectsMap((prev) => ({ ...prev, [c.id]: remaining }));
+                                toast(`${s.name} removed`, "success");
+                              } catch { toast("Failed to remove", "error"); }
+                              finally { setRemovingSubjectId(null); }
+                            }}
+                            className="p-1.5 text-red-400 hover:text-red-600 transition"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                      {csubs.length === 0 && !isAddingHere && (
+                        <p className="text-xs text-slate-400 py-2">No subjects yet. Click + Add subject.</p>
                       )}
-                      {isOpen ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
-                    </div>
-                  </button>
 
-                  {isOpen && (
-                    <div className="px-6 pb-4 bg-slate-50 border-t border-slate-100">
-                      <div className="pt-3 space-y-2">
-                        {subjects.map((s) => (
-                          <label key={s.id} className="flex items-center gap-3 p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-blue-50 cursor-pointer transition">
-                            <input
-                              type="checkbox"
-                              checked={(classSubjectsMap[c.id] ?? []).includes(s.id)}
-                              onChange={(e) => {
-                                setClassSubjectsMap((prev) => {
-                                  const cur = prev[c.id] ?? [];
-                                  return { ...prev, [c.id]: e.target.checked ? [...cur, s.id] : cur.filter((id) => id !== s.id) };
-                                });
-                              }}
-                              className="w-4 h-4 text-blue-600 rounded"
-                            />
-                            <span className="text-sm text-slate-800">{s.name}</span>
-                            {s.code && <span className="text-xs text-slate-400">({s.code})</span>}
-                          </label>
-                        ))}
-                        {subjects.length === 0 && <p className="text-xs text-slate-400">No subjects in library yet.</p>}
+                      {/* Inline add form */}
+                      {isAddingHere ? (
+                        <div className="flex items-center gap-2 pt-1">
+                          <input
+                            autoFocus
+                            value={newSubjectForm.name}
+                            onChange={(e) => setNewSubjectForm((p) => ({ ...p, name: e.target.value }))}
+                            placeholder="Subject name *"
+                            className={inputCls + " flex-1"}
+                          />
+                          <input
+                            value={newSubjectForm.code}
+                            onChange={(e) => setNewSubjectForm((p) => ({ ...p, code: e.target.value }))}
+                            placeholder="Code"
+                            className={inputCls + " w-24"}
+                          />
+                          <button
+                            disabled={savingNewSubject || !newSubjectForm.name.trim()}
+                            onClick={async () => {
+                              setSavingNewSubject(true);
+                              try {
+                                // Create subject in library then assign to class
+                                const res: any = await manageSubjectFn({ data: { name: newSubjectForm.name.trim(), code: newSubjectForm.code.trim() } });
+                                const newId = res?.id;
+                                // re-fetch library subjects
+                                const allSubs: any[] = await listSubjectsFn({ data: { schoolId: tenant.schoolId } }) as any[];
+                                setSubjects(allSubs);
+                                // find matching subject id
+                                const matched = allSubs.find((s: any) => s.name === newSubjectForm.name.trim());
+                                const sid = matched?.id ?? newId;
+                                if (sid) {
+                                  const updated = [...csubs, { id: sid, name: newSubjectForm.name.trim(), code: newSubjectForm.code.trim() || null }];
+                                  await setClassSubjectsFn({ data: { classId: c.id, subjectIds: updated.map((x) => x.id) } });
+                                  setClassSubjectsMap((prev) => ({ ...prev, [c.id]: updated }));
+                                }
+                                setNewSubjectForm({ name: "", code: "" });
+                                setAddingSubjectForClass(null);
+                                toast("Subject added", "success");
+                              } catch (err: any) { toast(err?.message ?? "Failed", "error"); }
+                              finally { setSavingNewSubject(false); }
+                            }}
+                            className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-xs font-semibold rounded-lg whitespace-nowrap"
+                          >
+                            {savingNewSubject ? "Adding…" : "Add"}
+                          </button>
+                          <button onClick={() => { setAddingSubjectForClass(null); setNewSubjectForm({ name: "", code: "" }); }} className="px-3 py-2 border border-slate-200 bg-white text-slate-500 text-xs rounded-lg hover:bg-slate-100">
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
                         <button
-                          disabled={savingClassSubjects === c.id}
-                          onClick={async () => {
-                            setSavingClassSubjects(c.id);
-                            try {
-                              await setClassSubjectsFn({ data: { classId: c.id, subjectIds: classSubjectsMap[c.id] ?? [] } });
-                              toast(`${c.name} subjects saved`, "success");
-                            } catch { toast("Save failed", "error"); }
-                            finally { setSavingClassSubjects(null); }
-                          }}
-                          className="mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-xs font-semibold rounded-lg transition"
+                          onClick={(e) => { e.stopPropagation(); setAddingSubjectForClass(c.id); setNewSubjectForm({ name: "", code: "" }); }}
+                          className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-semibold pt-1 transition"
                         >
-                          {savingClassSubjects === c.id ? "Saving…" : "Save"}
+                          <Plus className="w-3.5 h-3.5" /> Add subject
                         </button>
-                      </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
