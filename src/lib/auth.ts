@@ -2046,6 +2046,76 @@ export const getStudent = createServerFn({ method: "GET" })
     };
   });
 
+// ── Promote student to a new class ───────────────────────────────────────────
+
+const promoteStudentSchema = z.object({
+  studentId: z.number(),
+  newClassId: z.number(),
+  academicYear: z.string().max(20).optional(),
+});
+
+export const promoteStudent = createServerFn({ method: "POST" })
+  .validator((i: unknown) => promoteStudentSchema.parse(i))
+  .handler(async ({ data }) => {
+    await requireSession();
+    await assertCanOperateForUser();
+    const { db } = await import("@/lib/db");
+    const { students, classes, classEnrollments } = await import("@/lib/db/schema");
+
+    // Load student
+    const [student] = await db
+      .select({ id: students.id, schoolId: students.schoolId, locationId: students.locationId, currentClassId: students.currentClassId })
+      .from(students)
+      .where(eq(students.id, data.studentId))
+      .limit(1);
+    if (!student) throw new Error("Student not found");
+    if (student.currentClassId === data.newClassId) throw new Error("Student is already in that class");
+
+    // Capacity check on new class
+    const [cls] = await db.select({ capacity: classes.capacity }).from(classes).where(eq(classes.id, data.newClassId)).limit(1);
+    if (!cls) throw new Error("Class not found");
+    const [{ cnt }] = await db.select({ cnt: count() }).from(classEnrollments)
+      .where(and(eq(classEnrollments.classId, data.newClassId), eq(classEnrollments.status, "active")));
+    if (Number(cnt) >= cls.capacity) throw new Error(`Class is at full capacity (${cls.capacity} students)`);
+
+    // Mark current enrollment as promoted
+    if (student.currentClassId) {
+      await db.update(classEnrollments)
+        .set({ status: "promoted" })
+        .where(and(
+          eq(classEnrollments.studentId, data.studentId),
+          eq(classEnrollments.classId, student.currentClassId),
+          eq(classEnrollments.status, "active"),
+        ));
+    }
+
+    // Create new active enrollment (or reactivate if exists)
+    const [existing] = await db.select({ id: classEnrollments.id })
+      .from(classEnrollments)
+      .where(and(eq(classEnrollments.studentId, data.studentId), eq(classEnrollments.classId, data.newClassId)))
+      .limit(1);
+    if (existing) {
+      await db.update(classEnrollments)
+        .set({ status: "active", enrolledAt: new Date(), academicYear: data.academicYear ?? null })
+        .where(eq(classEnrollments.id, existing.id));
+    } else {
+      await db.insert(classEnrollments).values({
+        schoolId: student.schoolId,
+        locationId: student.locationId,
+        studentId: data.studentId,
+        classId: data.newClassId,
+        academicYear: data.academicYear ?? null,
+        enrolledAt: new Date(),
+        status: "active",
+      });
+    }
+
+    // Update student's current class
+    await db.update(students).set({ currentClassId: data.newClassId }).where(eq(students.id, data.studentId));
+
+    return { ok: true };
+  });
+
 const addStudentSchema = z.object({
   schoolId: z.number(),
   locationId: z.number(),

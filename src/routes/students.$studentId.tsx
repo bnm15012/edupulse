@@ -11,6 +11,7 @@ import {
   updateEmergencyContact, addEmergencyContact,
   uploadDocument, listDocuments, deleteDocument,
   getStudentAttendanceSummary, uploadReportCard, listReportCards, deleteReportCard,
+  promoteStudent,
 } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { useToast } from "@/lib/toast";
@@ -105,6 +106,7 @@ function StudentDetailPage() {
   const getFn = useServerFn(getStudent);
   const updateFn = useServerFn(updateStudent);
   const listClassesFn = useServerFn(listClassesForSchool);
+  const promoteFn = useServerFn(promoteStudent);
   const uploadDocFn = useServerFn(uploadDocument);
   const listDocsFn = useServerFn(listDocuments);
   const deleteDocFn = useServerFn(deleteDocument);
@@ -147,6 +149,12 @@ function StudentDetailPage() {
   const [rcClassId, setRcClassId] = useState<number | "">("");
   const [rcShowForm, setRcShowForm] = useState(false);
   const rcFileRef = useRef<HTMLInputElement>(null);
+
+  // Promote state
+  const [showPromote, setShowPromote] = useState(false);
+  const [promoteClassId, setPromoteClassId] = useState<number | "">("");
+  const [promoteYear, setPromoteYear] = useState("");
+  const [promoting, setPromoting] = useState(false);
 
   // Edit form state
   const [ef, setEf] = useState<any>({});
@@ -635,6 +643,82 @@ function StudentDetailPage() {
             {/* Class history tab */}
             {activeTab === "history" && (
               <Section icon={BookOpen} title="Class enrollment history" color="bg-emerald-50 text-emerald-700">
+                {/* Promote button */}
+                <div className="flex justify-end mb-4">
+                  <button
+                    onClick={() => { setShowPromote(true); setPromoteClassId(""); setPromoteYear(""); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition"
+                  >
+                    <GraduationCap className="w-3.5 h-3.5" /> Promote to next class
+                  </button>
+                </div>
+
+                {/* Promote modal */}
+                {showPromote && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-base font-bold text-slate-900">Promote student</h3>
+                        <button onClick={() => setShowPromote(false)} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        Current class: <span className="font-semibold text-slate-800">{detail?.currentClassName ?? "—"}</span>
+                      </p>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">New class <span className="text-red-500">*</span></label>
+                        <select
+                          value={promoteClassId}
+                          onChange={(e) => setPromoteClassId(e.target.value ? Number(e.target.value) : "")}
+                          className={selectCls}
+                        >
+                          <option value="">— select class —</option>
+                          {classes
+                            .filter((c) => c.id !== detail?.student.currentClassId)
+                            .map((c) => <option key={c.id} value={c.id}>{c.name} ({c.ageGroup})</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Academic year (optional)</label>
+                        <input
+                          value={promoteYear}
+                          onChange={(e) => setPromoteYear(e.target.value)}
+                          placeholder="e.g. 2026-27"
+                          className={inputCls}
+                        />
+                      </div>
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          onClick={() => setShowPromote(false)}
+                          className="flex-1 px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          disabled={!promoteClassId || promoting}
+                          onClick={async () => {
+                            if (!promoteClassId) return;
+                            setPromoting(true);
+                            try {
+                              await promoteFn({ data: { studentId, newClassId: Number(promoteClassId), academicYear: promoteYear || undefined } });
+                              setShowPromote(false);
+                              toast("Student promoted successfully", "success");
+                              load();
+                            } catch (err: any) {
+                              toast(err?.message ?? "Failed to promote", "error");
+                            } finally {
+                              setPromoting(false);
+                            }
+                          }}
+                          className="flex-1 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-50 transition"
+                        >
+                          {promoting ? "Promoting…" : "Promote"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Enrollment history list */}
                 {!detail?.enrollments.length ? (
                   <p className="text-sm text-slate-400">No enrollment records.</p>
                 ) : (
