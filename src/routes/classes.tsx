@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { listClasses, addClass, updateClass, archiveClass, getSession } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
+import { useToast } from "@/lib/toast";
 
 export const Route = createFileRoute("/classes")({
   component: Classes,
@@ -118,6 +119,7 @@ function AddClassModal({ onClose, onSaved, schoolId, locationId }: {
   onClose: () => void; onSaved: () => void; schoolId: number; locationId: number;
 }) {
   const addFn = useServerFn(addClass);
+  const toast = useToast();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -125,6 +127,7 @@ function AddClassModal({ onClose, onSaved, schoolId, locationId }: {
     setSaving(true); setError("");
     try {
       await addFn({ data: { schoolId, locationId, name: f.name, ageGroup: f.ageGroup, roomName: f.roomName || undefined, capacity: f.capacity, startTime: f.startTime || undefined, endTime: f.endTime || undefined, academicYear: f.academicYear || undefined, sortOrder: f.sortOrder ?? 0 } });
+      toast("Class added successfully", "success");
       onSaved();
     } catch (err: any) { setError(err?.message ?? "Failed"); }
     finally { setSaving(false); }
@@ -153,6 +156,7 @@ function EditClassDrawer({ cls, onClose, onUpdated, onArchived }: {
 }) {
   const updateFn = useServerFn(updateClass);
   const archiveFn = useServerFn(archiveClass);
+  const toast = useToast();
   const [saving, setSaving] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
@@ -165,6 +169,7 @@ function EditClassDrawer({ cls, onClose, onUpdated, onArchived }: {
     setSaving(true); setError("");
     try {
       await updateFn({ data: { classId: cls.id, name: f.name, ageGroup: f.ageGroup, roomName: f.roomName || undefined, capacity: f.capacity, startTime: f.startTime || undefined, endTime: f.endTime || undefined, academicYear: f.academicYear || undefined, status: f.status, sortOrder: f.sortOrder ?? 0 } });
+      toast("Class saved successfully", "success");
       onUpdated({ ...cls, ...f });
     } catch (err: any) { setError(err?.message ?? "Failed to save"); }
     finally { setSaving(false); }
