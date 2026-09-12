@@ -105,6 +105,7 @@ export const classes = mysqlTable("classes", {
   endTime: varchar("end_time", { length: 10 }),
   status: mysqlEnum("status", ["active", "inactive"]).default("active"),
   academicYear: varchar("academic_year", { length: 20 }),
+  sortOrder: int("sort_order").default(0),
   createdAt: timestamp("created_at").defaultNow(),
 }, (t) => ({
   uniqueClassName: uniqueIndex("classes_school_location_name").on(t.schoolId, t.locationId, t.name),

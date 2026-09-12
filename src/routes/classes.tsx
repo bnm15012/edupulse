@@ -16,6 +16,7 @@ type ClassRow = {
   id: number; name: string; ageGroup: string; roomName: string | null;
   capacity: number; startTime: string | null; endTime: string | null;
   status: string; academicYear: string | null; enrolledCount: number;
+  sortOrder: number | null;
 };
 
 const inputCls = "w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm transition";
@@ -41,12 +42,13 @@ function ClassForm({
     endTime: initial?.endTime ?? "",
     academicYear: initial?.academicYear ?? "",
     status: (initial?.status ?? "active") as "active" | "inactive",
+    sortOrder: String(initial?.sortOrder ?? "0"),
   });
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }));
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ ...f, capacity: parseInt(f.capacity) || 1 });
+    onSubmit({ ...f, capacity: parseInt(f.capacity) || 1, sortOrder: parseInt(f.sortOrder) || 0 });
   };
 
   return (
@@ -67,6 +69,11 @@ function ClassForm({
         <div>
           <label className="block text-xs font-semibold text-slate-600 mb-1.5">Capacity *</label>
           <input type="number" min={1} value={f.capacity} onChange={(e) => set("capacity", e.target.value)} placeholder="20" className={inputCls} required />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-600 mb-1.5">Class order (hierarchy)</label>
+          <input type="number" min={0} value={f.sortOrder} onChange={(e) => set("sortOrder", e.target.value)} placeholder="e.g. 1=Nursery, 2=LKG, 3=UKG…" className={inputCls} />
+          <p className="text-xs text-slate-400 mt-1">Lower number = earlier in the progression</p>
         </div>
         <div>
           <label className="block text-xs font-semibold text-slate-600 mb-1.5">Academic year</label>
@@ -117,7 +124,7 @@ function AddClassModal({ onClose, onSaved, schoolId, locationId }: {
   const submit = async (f: any) => {
     setSaving(true); setError("");
     try {
-      await addFn({ data: { schoolId, locationId, name: f.name, ageGroup: f.ageGroup, roomName: f.roomName || undefined, capacity: f.capacity, startTime: f.startTime || undefined, endTime: f.endTime || undefined, academicYear: f.academicYear || undefined } });
+      await addFn({ data: { schoolId, locationId, name: f.name, ageGroup: f.ageGroup, roomName: f.roomName || undefined, capacity: f.capacity, startTime: f.startTime || undefined, endTime: f.endTime || undefined, academicYear: f.academicYear || undefined, sortOrder: f.sortOrder ?? 0 } });
       onSaved();
     } catch (err: any) { setError(err?.message ?? "Failed"); }
     finally { setSaving(false); }
@@ -157,7 +164,7 @@ function EditClassDrawer({ cls, onClose, onUpdated, onArchived }: {
   const submit = async (f: any) => {
     setSaving(true); setError("");
     try {
-      await updateFn({ data: { classId: cls.id, name: f.name, ageGroup: f.ageGroup, roomName: f.roomName || undefined, capacity: f.capacity, startTime: f.startTime || undefined, endTime: f.endTime || undefined, academicYear: f.academicYear || undefined, status: f.status } });
+      await updateFn({ data: { classId: cls.id, name: f.name, ageGroup: f.ageGroup, roomName: f.roomName || undefined, capacity: f.capacity, startTime: f.startTime || undefined, endTime: f.endTime || undefined, academicYear: f.academicYear || undefined, status: f.status, sortOrder: f.sortOrder ?? 0 } });
       onUpdated({ ...cls, ...f });
     } catch (err: any) { setError(err?.message ?? "Failed to save"); }
     finally { setSaving(false); }

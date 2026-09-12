@@ -36,6 +36,7 @@ type MedicalRecord = {
 type Enrollment = {
   classId: number; className: string; ageGroup: string;
   academicYear: string | null; status: string; enrolledAt: string | null;
+  sortOrder: number | null;
 };
 type DetailData = {
   student: {
@@ -48,7 +49,7 @@ type DetailData = {
   enrollments: Enrollment[];
   currentClassName: string | null;
 };
-type ClassOption = { id: number; name: string; ageGroup: string };
+type ClassOption = { id: number; name: string; ageGroup: string; sortOrder: number | null };
 type DocRow = { id: number; type: string; publicUrl: string | null; uploadedAt: Date | null };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -684,9 +685,20 @@ function StudentDetailPage() {
                           className={selectCls}
                         >
                           <option value="">— select class —</option>
-                          {classes
-                            .filter((c) => c.id !== detail?.student.currentClassId)
-                            .map((c) => <option key={c.id} value={c.id}>{c.name} ({c.ageGroup})</option>)}
+                          {(() => {
+                            const currentSortOrder = classes.find((c) => c.id === detail?.student.currentClassId)?.sortOrder ?? null;
+                            const filtered = classes.filter((c) => {
+                              if (c.id === detail?.student.currentClassId) return false;
+                              // If sort orders are configured, only show higher ones
+                              if (currentSortOrder != null && c.sortOrder != null && currentSortOrder > 0) {
+                                return c.sortOrder > currentSortOrder;
+                              }
+                              return true; // fallback: show all if no order set
+                            });
+                            return filtered.map((c) => (
+                              <option key={c.id} value={c.id}>{c.name} ({c.ageGroup}){c.sortOrder ? ` — Level ${c.sortOrder}` : ""}</option>
+                            ));
+                          })()}
                         </select>
                       </div>
                       <div>

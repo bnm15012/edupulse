@@ -2013,11 +2013,12 @@ export const getStudent = createServerFn({ method: "GET" })
         academicYear: classEnrollments.academicYear,
         status: classEnrollments.status,
         enrolledAt: classEnrollments.enrolledAt,
+        sortOrder: classes.sortOrder,
       })
       .from(classEnrollments)
       .innerJoin(classes, eq(classEnrollments.classId, classes.id))
       .where(eq(classEnrollments.studentId, data.studentId))
-      .orderBy(desc(classEnrollments.enrolledAt));
+      .orderBy(asc(classes.sortOrder), asc(classEnrollments.enrolledAt));
 
     let currentClassName: string | null = null;
     if (student.currentClassId) {
@@ -2464,10 +2465,10 @@ export const listClassesForSchool = createServerFn({ method: "GET" })
     const { db } = await import("@/lib/db");
     const { classes } = await import("@/lib/db/schema");
     return db
-      .select({ id: classes.id, name: classes.name, ageGroup: classes.ageGroup })
+      .select({ id: classes.id, name: classes.name, ageGroup: classes.ageGroup, sortOrder: classes.sortOrder })
       .from(classes)
       .where(and(eq(classes.schoolId, data.schoolId), eq(classes.locationId, data.locationId), eq(classes.status, "active")))
-      .orderBy(asc(classes.name));
+      .orderBy(asc(classes.sortOrder), asc(classes.name));
   });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -3028,10 +3029,11 @@ export const listClasses = createServerFn({ method: "GET" })
         endTime: classes.endTime,
         academicYear: classes.academicYear,
         status: classes.status,
+        sortOrder: classes.sortOrder,
       })
       .from(classes)
       .where(and(eq(classes.schoolId, data.schoolId), eq(classes.locationId, data.locationId)))
-      .orderBy(asc(classes.name));
+      .orderBy(asc(classes.sortOrder), asc(classes.name));
 
     if (!isAdmin && (user.role === "teacher" || user.role === "staff")) {
       const [staffRecord] = await db
@@ -3052,6 +3054,7 @@ export const listClasses = createServerFn({ method: "GET" })
             endTime: classes.endTime,
             academicYear: classes.academicYear,
             status: classes.status,
+            sortOrder: classes.sortOrder,
           })
           .from(classes)
           .innerJoin(staffClassAssignments, eq(staffClassAssignments.classId, classes.id))
@@ -3060,7 +3063,7 @@ export const listClasses = createServerFn({ method: "GET" })
             eq(classes.locationId, data.locationId),
             eq(staffClassAssignments.staffId, staffRecord.id),
           ))
-          .orderBy(asc(classes.name));
+          .orderBy(asc(classes.sortOrder), asc(classes.name));
       } else {
         return [];
       }
@@ -3088,6 +3091,7 @@ const addClassSchema = z.object({
   startTime: z.string().max(10).optional(),
   endTime: z.string().max(10).optional(),
   academicYear: z.string().max(20).optional(),
+  sortOrder: z.number().int().min(0).optional(),
 });
 
 export const addClass = createServerFn({ method: "POST" })
@@ -3119,6 +3123,7 @@ export const addClass = createServerFn({ method: "POST" })
       roomName: data.roomName || null, capacity: data.capacity,
       startTime: data.startTime || null, endTime: data.endTime || null,
       academicYear: data.academicYear || null, status: "active",
+      sortOrder: data.sortOrder ?? 0,
     });
     return { ok: true, classId: Number((res as any).insertId) };
   });
@@ -3133,6 +3138,7 @@ const updateClassSchema = z.object({
   endTime: z.string().max(10).optional(),
   academicYear: z.string().max(20).optional(),
   status: z.enum(["active", "inactive"]).optional(),
+  sortOrder: z.number().int().min(0).optional(),
 });
 
 export const updateClass = createServerFn({ method: "POST" })
@@ -3173,6 +3179,7 @@ export const updateClass = createServerFn({ method: "POST" })
       startTime: data.startTime || null, endTime: data.endTime || null,
       academicYear: data.academicYear || null,
       status: data.status ?? undefined,
+      sortOrder: data.sortOrder ?? undefined,
     }).where(eq(classes.id, data.classId));
     return { ok: true };
   });
