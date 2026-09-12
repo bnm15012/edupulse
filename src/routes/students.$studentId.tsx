@@ -1,10 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
   ArrowLeft, Baby, User, Shield, Heart, BookOpen, FileText,
   Upload, ExternalLink, Loader2, AlertCircle, Pencil, Save, XCircle, Trash2, Plus,
-  BarChart2, GraduationCap, CheckCircle2, X,
+  BarChart2, GraduationCap, CheckCircle2, X, ChevronDown,
 } from "lucide-react";
 import {
   getStudent, updateStudent, listClassesForSchool,
@@ -137,6 +137,18 @@ function StudentDetailPage() {
   // Attendance summary state
   const [attendanceSummary, setAttendanceSummary] = useState<any[]>([]);
   const [attendanceLoading, setAttendanceLoading] = useState(false);
+  const [expandedYear, setExpandedYear] = useState<string | null>(null);
+  const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
+
+  const byYear = useMemo(() => {
+    const map = new Map<string, any[]>();
+    for (const m of attendanceSummary) {
+      const year = (m.monthKey as string).slice(0, 4);
+      if (!map.has(year)) map.set(year, []);
+      map.get(year)!.push(m);
+    }
+    return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [attendanceSummary]);
 
   // Report cards state
   type ReportCard = { id: number; academicYear: string; term: string; className: string | null; publicUrl: string | null; uploadedAt: any };
@@ -867,38 +879,87 @@ function StudentDetailPage() {
                     <p className="text-xs text-slate-300 mt-0.5">Attendance will appear here once it's marked for this student</p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {attendanceSummary.map((m: any) => {
-                      const pct = m.pct as number;
-                      const color = pct >= 75 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-500" : "bg-red-500";
-                      const textColor = pct >= 75 ? "text-emerald-700" : pct >= 50 ? "text-amber-700" : "text-red-700";
-                      const bgColor = pct >= 75 ? "bg-emerald-50" : pct >= 50 ? "bg-amber-50" : "bg-red-50";
+                  <div className="space-y-2">
+                    {byYear.map(([year, months]) => {
+                      const openYear = expandedYear === year;
+                      const totalDays = months.reduce((a: number, m: any) => a + ((m.schoolDays as number) || 0), 0);
+                      const weighted = months.reduce((a: number, m: any) => a + ((m.pct as number) || 0) * ((m.schoolDays as number) || 0), 0);
+                      const yearPct = totalDays > 0 ? Math.round(weighted / totalDays) : 0;
+                      const yearBadge = yearPct >= 75 ? "bg-emerald-50 text-emerald-700" : yearPct >= 50 ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700";
                       return (
-                        <div key={m.monthKey} className="bg-white rounded-xl border border-slate-200 p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-bold text-slate-800">{m.label}</span>
-                            <span className={`text-sm font-bold px-2.5 py-0.5 rounded-full ${bgColor} ${textColor}`}>{pct}%</span>
-                          </div>
-                          {/* Progress bar */}
-                          <div className="w-full h-2 bg-slate-100 rounded-full mb-3">
-                            <div className={`h-2 rounded-full ${color} transition-all`} style={{ width: `${pct}%` }} />
-                          </div>
-                          {/* Stats row */}
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
-                            {[
-                              { label: "Present", val: m.present, cls: "text-emerald-700 bg-emerald-50" },
-                              { label: "Absent", val: m.absent, cls: "text-red-700 bg-red-50" },
-                              { label: "Half day", val: m.halfDay, cls: "text-amber-700 bg-amber-50" },
-                              { label: "Leave", val: m.leave, cls: "text-slate-600 bg-slate-100" },
-                            ].map(({ label, val, cls }) => (
-                              <div key={label} className={`rounded-lg py-1.5 ${cls}`}>
-                                <p className="text-base font-bold">{val}</p>
-                                <p className="text-xs opacity-75">{label}</p>
-                              </div>
-                            ))}
-                          </div>
-                          {m.schoolDays > 0 && (
-                            <p className="text-xs text-slate-400 mt-2 text-right">{m.schoolDays} school days</p>
+                        <div key={year} className="rounded-xl border border-slate-200 overflow-hidden bg-white">
+                          {/* Year row */}
+                          <button
+                            onClick={() => setExpandedYear(openYear ? null : year)}
+                            className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50 transition"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-bold text-slate-800">{year}</span>
+                              <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${openYear ? "rotate-180" : ""}`} />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-slate-400">
+                                {months.reduce((a: number, m: any) => a + (m.present || 0), 0)}P · {months.reduce((a: number, m: any) => a + (m.absent || 0), 0)}A
+                              </span>
+                              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${yearBadge}`}>{yearPct}%</span>
+                            </div>
+                          </button>
+                          {/* Months */}
+                          {openYear && (
+                            <div className="p-2 space-y-2 bg-slate-50/50">
+                              {months.map((m: any) => {
+                                const pct = m.pct as number;
+                                const barColor = pct >= 75 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-500" : "bg-red-500";
+                                const badgeColor = pct >= 75 ? "bg-emerald-50 text-emerald-700" : pct >= 50 ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700";
+                                const openMonth = expandedMonth === m.monthKey;
+                                const days = (m.days ?? []) as { date: string; status: string }[];
+                                return (
+                                  <div key={m.monthKey} className="rounded-xl border border-slate-200 overflow-hidden bg-white">
+                                    {/* Month row */}
+                                    <button
+                                      onClick={() => setExpandedMonth(openMonth ? null : m.monthKey)}
+                                      className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50 transition"
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-sm font-semibold text-slate-700">{m.label}</span>
+                                        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${openMonth ? "rotate-180" : ""}`} />
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs text-slate-400">{m.present}P · {m.absent}A</span>
+                                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${badgeColor}`}>{pct}%</span>
+                                      </div>
+                                    </button>
+                                    <div className="w-full h-1.5 bg-slate-100 px-4" style={{}}>
+                                      <div className={`h-1.5 rounded-full ${barColor} mx-0`} style={{ width: `${pct}%` }} />
+                                    </div>
+                                    {/* Day breakdown */}
+                                    {openMonth && (
+                                      <div className="px-4 pb-4 pt-2 space-y-1">
+                                        {days.length === 0 ? (
+                                          <p className="text-xs text-slate-400">No day-level data</p>
+                                        ) : days.map((d: any) => {
+                                          const status = d.status as string;
+                                          const badge = status === "present"
+                                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                            : status === "absent"
+                                            ? "bg-red-50 text-red-700 border-red-200"
+                                            : status === "half_day"
+                                            ? "bg-amber-50 text-amber-700 border-amber-200"
+                                            : "bg-slate-100 text-slate-600 border-slate-200";
+                                          const label = status === "half_day" ? "Half day" : status.charAt(0).toUpperCase() + status.slice(1);
+                                          return (
+                                            <div key={d.date} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
+                                              <span className="text-sm text-slate-700">{fmtDate(d.date)}</span>
+                                              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${badge}`}>{label}</span>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
                           )}
                         </div>
                       );
