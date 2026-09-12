@@ -6485,7 +6485,7 @@ export const saveStudentMarks = createServerFn({ method: "POST" })
     await assertCanOperateForUser();
     await requireNotReceptionist(userId);
     const { db } = await import("@/lib/db");
-    const { studentMarks, examSubjects, exams } = await import("@/lib/db/schema");
+    const { studentMarks, examSubjects, exams, staff } = await import("@/lib/db/schema");
 
     // validate all exam-subjects belong to this school
     const ids = data.marks.map((m) => m.examSubjectId);
@@ -6499,6 +6499,10 @@ export const saveStudentMarks = createServerFn({ method: "POST" })
       if (examRows.some((e) => e.schoolId !== schoolId)) throw new Error("Not authorized");
     }
 
+    // markedBy is a staff FK — look up the staff row for this user (may be null for school admins)
+    const [staffRow] = await db.select({ id: staff.id }).from(staff).where(eq(staff.userId, userId)).limit(1);
+    const markedById = staffRow?.id ?? null;
+
     for (const m of data.marks) {
       const marksValue = m.marks === "" || m.marks == null ? null : String(m.marks);
       const [existing] = await db.select({ id: studentMarks.id })
@@ -6511,7 +6515,7 @@ export const saveStudentMarks = createServerFn({ method: "POST" })
           marks: marksValue,
           grade: m.grade,
           notes: m.notes,
-          markedBy: userId,
+          markedBy: markedById,
         }).where(eq(studentMarks.id, existing.id));
       } else {
         await db.insert(studentMarks).values({
@@ -6520,7 +6524,7 @@ export const saveStudentMarks = createServerFn({ method: "POST" })
           marks: marksValue,
           grade: m.grade,
           notes: m.notes,
-          markedBy: userId,
+          markedBy: markedById,
         });
       }
     }
