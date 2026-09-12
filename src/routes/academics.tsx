@@ -367,7 +367,13 @@ function AcademicsPage() {
               <button onClick={async () => {
                 if (!tenant) return;
                 await setSchoolBoardFn({ data: { schoolId: tenant.schoolId, board: schoolBoard as any } });
-                toast("Board saved", "success");
+                // Auto-seed default grading scales for the selected board
+                if (schoolBoard !== "preschool") {
+                  await seedDefaultGradingScalesFn({ data: { board: schoolBoard } });
+                  const d = await listGradingScalesFn({ data: { board: schoolBoard } });
+                  setGradingScalesList(d as Scale[]);
+                }
+                toast("Board saved" + (schoolBoard !== "preschool" ? " and default scales applied" : ""), "success");
               }} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg">Save board</button>
               {schoolBoard !== "preschool" && (
                 <button onClick={async () => {
@@ -375,7 +381,7 @@ function AcademicsPage() {
                   const d = await listGradingScalesFn({ data: { board: schoolBoard } });
                   setGradingScalesList(d as Scale[]);
                   toast("Default scales seeded", "success");
-                }} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg">Seed default scales</button>
+                }} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg">Re-seed scales</button>
               )}
             </div>
           </div>
