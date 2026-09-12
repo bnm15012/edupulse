@@ -1167,6 +1167,7 @@ export const updateChildPersonal = createServerFn({ method: "POST" })
   .validator((input: unknown) => updateChildPersonalSchema.parse(input))
   .handler(async ({ data }) => {
     const userId = await requireSession();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { users, parents, students } = await import("@/lib/db/schema");
 
@@ -1204,6 +1205,7 @@ export const updateParentContact = createServerFn({ method: "POST" })
   .validator((input: unknown) => updateParentContactSchema.parse(input))
   .handler(async ({ data }) => {
     const userId = await requireSession();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { users, parents } = await import("@/lib/db/schema");
 
@@ -1651,6 +1653,7 @@ export const updateSchoolSubscription = createServerFn({ method: "POST" })
   .validator((input: unknown) => updateSchoolSubscriptionSchema.parse(input))
   .handler(async ({ data }) => {
     const userId = await requireSession();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { users, schools, subscriptions, plans } = await import("@/lib/db/schema");
 
@@ -1704,6 +1707,7 @@ export const recordSubscriptionPayment = createServerFn({ method: "POST" })
   .validator((input: unknown) => recordSubscriptionPaymentSchema.parse(input))
   .handler(async ({ data }) => {
     const userId = await requireSession();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { users, subscriptions, subscriptionPayments } = await import("@/lib/db/schema");
 
@@ -1745,6 +1749,7 @@ export const viewAsSchoolAdmin = createServerFn({ method: "POST" })
   .validator((input: unknown) => viewAsSchoolAdminSchema.parse(input))
   .handler(async ({ data }) => {
     const userId = await requireSession();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { users, schools, locations } = await import("@/lib/db/schema");
 
@@ -1810,6 +1815,41 @@ async function requireNotReceptionist(userId: number) {
  *   teacher/staff    → only their own location
  *   parent           → only their own location
  */
+async function assertCanOperate(schoolId: number) {
+  if (!schoolId) return;
+  const { db } = await import("@/lib/db");
+  const { schools, subscriptions } = await import("@/lib/db/schema");
+  const [school] = await db.select({ status: schools.status }).from(schools).where(eq(schools.id, schoolId)).limit(1);
+  if (school?.status === "suspended") throw new Error("School account is suspended.");
+
+  const [sub] = await db.select({
+    id: subscriptions.id,
+    status: subscriptions.status,
+    currentPeriodEnd: subscriptions.currentPeriodEnd,
+    amount: subscriptions.amount,
+    billingCycle: subscriptions.billingCycle,
+  }).from(subscriptions).where(eq(subscriptions.schoolId, schoolId)).limit(1);
+
+  const isFreePlan = !sub || Number(sub.amount ?? 0) <= 0;
+  if (isFreePlan) return; // free schools can always operate
+
+  const now = new Date();
+  const periodEnd = sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd) : null;
+  const isExpired = !periodEnd || periodEnd < now;
+  if (isExpired) {
+    throw new Error("Subscription expired. Please renew your plan to continue.");
+  }
+}
+
+async function assertCanOperateForUser() {
+  const userId = await requireSession();
+  const { db } = await import("@/lib/db");
+  const { users } = await import("@/lib/db/schema");
+  const [user] = await db.select({ role: users.role, schoolId: users.schoolId }).from(users).where(eq(users.id, userId)).limit(1);
+  if (!user || user.role === "super_admin") return; // super admin and anonymous calls not blocked
+  await assertCanOperate(Number(user.schoolId ?? 0));
+}
+
 async function requireAuth(requestedSchoolId?: number, requestedLocationId?: number) {
   const userId = await requireSession();
   const { db } = await import("@/lib/db");
@@ -2035,6 +2075,7 @@ export const addStudent = createServerFn({ method: "POST" })
   .validator((input: unknown) => addStudentSchema.parse(input))
   .handler(async ({ data }) => {
     await requireAuth(data.schoolId, data.locationId);
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { students, parents, emergencyContacts, medicalNotes } = await import("@/lib/db/schema");
 
@@ -2231,6 +2272,7 @@ export const updateStudent = createServerFn({ method: "POST" })
   .validator((input: unknown) => updateStudentSchema.parse(input))
   .handler(async ({ data }) => {
     await requireSession();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { students, parents, medicalNotes, users } = await import("@/lib/db/schema");
 
@@ -2428,6 +2470,7 @@ export const addBranch = createServerFn({ method: "POST" })
   .validator((input: unknown) => addBranchSchema.parse(input))
   .handler(async ({ data }) => {
     const userId = await requireSession();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { users, locations } = await import("@/lib/db/schema");
 
@@ -2483,6 +2526,7 @@ export const updateSchool = createServerFn({ method: "POST" })
   .validator((input: unknown) => updateSchoolSchema.parse(input))
   .handler(async ({ data }) => {
     const userId = await requireSession();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { users, schools } = await import("@/lib/db/schema");
 
@@ -2518,6 +2562,7 @@ export const updateSchoolLogo = createServerFn({ method: "POST" })
   .validator((input: unknown) => updateSchoolLogoSchema.parse(input))
   .handler(async ({ data }) => {
     const userId = await requireSession();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { users, schools } = await import("@/lib/db/schema");
 
@@ -2648,6 +2693,7 @@ export const addInquiry = createServerFn({ method: "POST" })
   .validator((input: unknown) => addInquirySchema.parse(input))
   .handler(async ({ data }) => {
     await requireAuth(data.schoolId, data.locationId);
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { inquiries } = await import("@/lib/db/schema");
 
@@ -2685,6 +2731,7 @@ export const updateInquiry = createServerFn({ method: "POST" })
   .validator((input: unknown) => updateInquirySchema.parse(input))
   .handler(async ({ data }) => {
     await requireSession();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { inquiries } = await import("@/lib/db/schema");
 
@@ -2738,6 +2785,7 @@ export const enrollFromAdmission = createServerFn({ method: "POST" })
   .validator((input: unknown) => enrollFromAdmissionSchema.parse(input))
   .handler(async ({ data }) => {
     await requireAuth(data.schoolId, data.locationId);
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { inquiries, students, parents, classEnrollments, users } = await import("@/lib/db/schema");
 
@@ -2976,6 +3024,7 @@ export const addClass = createServerFn({ method: "POST" })
   .validator((input: unknown) => addClassSchema.parse(input))
   .handler(async ({ data }) => {
     const user = await requireAuth(data.schoolId, data.locationId);
+    await assertCanOperateForUser();
     if (!["super_admin", "school_admin", "location_admin"].includes(user.role ?? "")) {
       throw new Error("Only admins can add classes");
     }
@@ -3030,6 +3079,7 @@ export const updateClass = createServerFn({ method: "POST" })
     if (!cls) throw new Error("Class not found");
 
     const user = await requireAuth(cls.schoolId, cls.locationId);
+    await assertCanOperateForUser();
     if (!["super_admin", "school_admin", "location_admin"].includes(user.role ?? "")) {
       throw new Error("Only admins can update classes");
     }
@@ -3073,6 +3123,7 @@ export const archiveClass = createServerFn({ method: "POST" })
     if (!cls) throw new Error("Class not found");
 
     const user = await requireAuth(cls.schoolId, cls.locationId);
+    await assertCanOperateForUser();
     if (!["super_admin", "school_admin", "location_admin"].includes(user.role ?? "")) {
       throw new Error("Only admins can archive classes");
     }
@@ -3153,6 +3204,7 @@ export const addStaffMember = createServerFn({ method: "POST" })
   .validator((input: unknown) => addStaffSchema.parse(input))
   .handler(async ({ data }) => {
     await requireAuth(data.schoolId, data.locationId);
+    await assertCanOperateForUser();
 
     // Plan limit guard
     await checkPlanLimit(data.schoolId, "staff");
@@ -3233,6 +3285,7 @@ export const updateStaffMember = createServerFn({ method: "POST" })
   .validator((input: unknown) => updateStaffSchema.parse(input))
   .handler(async ({ data }) => {
     await requireSession();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { staff, users } = await import("@/lib/db/schema");
     const [row] = await db.select({ userId: staff.userId, email: staff.email }).from(staff).where(eq(staff.id, data.staffId)).limit(1);
@@ -3262,6 +3315,7 @@ export const archiveStaff = createServerFn({ method: "POST" })
   .validator((input: unknown) => archiveStaffSchema.parse(input))
   .handler(async ({ data }) => {
     await requireSession();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { staff } = await import("@/lib/db/schema");
     await db.update(staff).set({ status: "terminated" }).where(eq(staff.id, data.staffId));
@@ -3277,6 +3331,7 @@ export const sendParentInvite = createServerFn({ method: "POST" })
   .validator((input: unknown) => sendParentInviteSchema.parse(input))
   .handler(async ({ data }) => {
     await requireSession();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { inquiries, users, schools } = await import("@/lib/db/schema");
 
@@ -3338,6 +3393,7 @@ export const resendStaffInvite = createServerFn({ method: "POST" })
   .validator((input: unknown) => resendStaffInviteSchema.parse(input))
   .handler(async ({ data }) => {
     await requireSession();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { staff, users, schools } = await import("@/lib/db/schema");
 
@@ -3443,6 +3499,7 @@ export const addInvoice = createServerFn({ method: "POST" })
   .validator((input: unknown) => addInvoiceSchema.parse(input))
   .handler(async ({ data }) => {
     await requireAuth(data.schoolId, data.locationId);
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { invoices } = await import("@/lib/db/schema");
     const [res] = await db.insert(invoices).values({
@@ -3468,6 +3525,7 @@ export const updateInvoice = createServerFn({ method: "POST" })
   .validator((input: unknown) => updateInvoiceSchema.parse(input))
   .handler(async ({ data }) => {
     await requireSession();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { invoices } = await import("@/lib/db/schema");
     await db.update(invoices).set({
@@ -3492,6 +3550,7 @@ export const generateStudentInvoice = createServerFn({ method: "POST" })
   .validator((i: unknown) => generateStudentInvoiceSchema.parse(i))
   .handler(async ({ data }) => {
     await requireAuth(data.schoolId, data.locationId);
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { invoices, feeStructures, students } = await import("@/lib/db/schema");
 
@@ -3639,6 +3698,7 @@ export const updateBranch = createServerFn({ method: "POST" })
   .validator((input: unknown) => updateBranchSchema.parse(input))
   .handler(async ({ data }) => {
     const userId = await requireSession();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { users, locations } = await import("@/lib/db/schema");
     const [user] = await db.select({ role: users.role, schoolId: users.schoolId }).from(users).where(eq(users.id, userId)).limit(1);
@@ -3672,6 +3732,7 @@ export const archiveStudent = createServerFn({ method: "POST" })
   .validator((input: unknown) => archiveStudentSchema.parse(input))
   .handler(async ({ data }) => {
     await requireSession();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { students } = await import("@/lib/db/schema");
     await db.update(students).set({ status: "withdrawn" }).where(eq(students.id, data.studentId));
@@ -3683,6 +3744,7 @@ export const archiveInquiry = createServerFn({ method: "POST" })
   .validator((input: unknown) => archiveInquirySchema.parse(input))
   .handler(async ({ data }) => {
     await requireSession();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { inquiries } = await import("@/lib/db/schema");
     await db.update(inquiries).set({ status: "rejected" }).where(eq(inquiries.id, data.inquiryId));
@@ -3727,6 +3789,7 @@ export const addFeeStructure = createServerFn({ method: "POST" })
   .validator((i: unknown) => addFeeStructureSchema.parse(i))
   .handler(async ({ data }) => {
     await requireAuth(data.schoolId, data.locationId);
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { feeStructures } = await import("@/lib/db/schema");
 
@@ -3764,6 +3827,7 @@ export const updateFeeStructure = createServerFn({ method: "POST" })
   .validator((i: unknown) => updateFeeStructureSchema.parse(i))
   .handler(async ({ data }) => {
     await requireSession();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { feeStructures } = await import("@/lib/db/schema");
 
@@ -3796,6 +3860,7 @@ export const archiveFeeStructure = createServerFn({ method: "POST" })
   .validator((i: unknown) => archiveFeeStructureSchema.parse(i))
   .handler(async ({ data }) => {
     await requireSession();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { feeStructures } = await import("@/lib/db/schema");
     await db.delete(feeStructures).where(eq(feeStructures.id, data.feeStructureId));
@@ -3818,6 +3883,7 @@ export const markStaffAttendance = createServerFn({ method: "POST" })
   .validator((i: unknown) => markAttendanceSchema.parse(i))
   .handler(async ({ data }) => {
     await requireAuth(data.schoolId, data.locationId);
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { staffAttendance } = await import("@/lib/db/schema");
     // Upsert: delete existing record for same staffId+date, then insert
@@ -3876,6 +3942,7 @@ export const assignStaffToClass = createServerFn({ method: "POST" })
   .validator((i: unknown) => assignStaffToClassSchema.parse(i))
   .handler(async ({ data }) => {
     await requireAuth(data.schoolId, data.locationId);
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { staffClassAssignments, classes } = await import("@/lib/db/schema");
 
@@ -3940,6 +4007,7 @@ export const removeStaffFromClass = createServerFn({ method: "POST" })
   .validator((i: unknown) => removeStaffFromClassSchema.parse(i))
   .handler(async ({ data }) => {
     await requireSession();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { staffClassAssignments } = await import("@/lib/db/schema");
     await db.delete(staffClassAssignments).where(
@@ -3962,6 +4030,7 @@ export const updateEmergencyContact = createServerFn({ method: "POST" })
   .validator((i: unknown) => updateEmergencyContactSchema.parse(i))
   .handler(async ({ data }) => {
     await requireSession();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { emergencyContacts } = await import("@/lib/db/schema");
     await db.update(emergencyContacts).set({
@@ -3980,6 +4049,7 @@ export const addEmergencyContact = createServerFn({ method: "POST" })
   .validator((i: unknown) => addEmergencyContactSchema.parse(i))
   .handler(async ({ data }) => {
     await requireAuth(data.schoolId, data.locationId);
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { emergencyContacts } = await import("@/lib/db/schema");
     const [r] = await db.insert(emergencyContacts).values({
@@ -4012,6 +4082,7 @@ export const markStudentAttendance = createServerFn({ method: "POST" })
   .validator((i: unknown) => markStudentAttendanceSchema.parse(i))
   .handler(async ({ data }) => {
     const session = await requireAuth(data.schoolId, data.locationId);
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { studentAttendance, attendanceSessions } = await import("@/lib/db/schema");
 
@@ -4510,6 +4581,7 @@ export const dismissAnnouncement = createServerFn({ method: "POST" })
   .validator((i: unknown) => dismissAnnouncementSchema.parse(i))
   .handler(async ({ data }) => {
     const user = await requireAuth();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { schoolAnnouncementDismissals, announcementDismissals } = await import("@/lib/db/schema");
 
@@ -5419,6 +5491,7 @@ export const runFeeAutomation = createServerFn({ method: "POST" })
   .validator((i: unknown) => feeAutomationSchema.parse(i))
   .handler(async ({ data }) => {
     await requireAuth(data.schoolId, data.locationId);
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { invoices, feeStructures, students, classEnrollments } = await import("@/lib/db/schema");
 
@@ -5526,6 +5599,7 @@ export const markInvoicePaid = createServerFn({ method: "POST" })
   .validator((i: unknown) => markInvoicePaidSchema.parse(i))
   .handler(async ({ data }) => {
     await requireSession();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { invoices, payments } = await import("@/lib/db/schema");
 
@@ -5561,6 +5635,7 @@ export const sendInvoice = createServerFn({ method: "POST" })
   .validator((i: unknown) => sendInvoiceSchema.parse(i))
   .handler(async ({ data }) => {
     await requireSession();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { invoices, students, parents, schools } = await import("@/lib/db/schema");
 
@@ -5629,6 +5704,7 @@ export const createRazorpayOrder = createServerFn({ method: "POST" })
   .validator((i: unknown) => createRazorpayOrderSchema.parse(i))
   .handler(async ({ data }) => {
     await requireSession();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { invoices, schools } = await import("@/lib/db/schema");
 
@@ -5740,6 +5816,7 @@ export const saveRazorpayKeys = createServerFn({ method: "POST" })
   .validator((i: unknown) => saveRazorpayKeysSchema.parse(i))
   .handler(async ({ data }) => {
     await requireSession();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { schools } = await import("@/lib/db/schema");
     await db.update(schools).set({
@@ -5789,6 +5866,7 @@ export const manageExpense = createServerFn({ method: "POST" })
     const { db } = await import("@/lib/db");
     const { expenses } = await import("@/lib/db/schema");
     const user = await requireAuth(data.schoolId, data.locationId);
+    await assertCanOperateForUser();
     if (!["super_admin", "school_admin", "location_admin"].includes(user.role ?? "")) throw new Error("Not authorized");
 
     if (data.id) {
@@ -5844,6 +5922,7 @@ export const deleteExpense = createServerFn({ method: "POST" })
     const { db } = await import("@/lib/db");
     const { expenses } = await import("@/lib/db/schema");
     const user = await requireAuth(data.schoolId, data.locationId);
+    await assertCanOperateForUser();
     if (!["super_admin", "school_admin", "location_admin"].includes(user.role ?? "")) throw new Error("Not authorized");
     await db.delete(expenses).where(and(eq(expenses.id, data.id), eq(expenses.schoolId, data.schoolId), eq(expenses.locationId, data.locationId)));
     return { ok: true };
@@ -5971,6 +6050,7 @@ export const manageSubject = createServerFn({ method: "POST" })
   .validator((i: unknown) => manageSubjectSchema.parse(i))
   .handler(async ({ data }) => {
     const { schoolId, locationId, userId } = await requireAuth();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { subjects } = await import("@/lib/db/schema");
 
@@ -6019,6 +6099,7 @@ export const deleteSubject = createServerFn({ method: "POST" })
   .validator((i: unknown) => deleteSubjectSchema.parse(i))
   .handler(async ({ data }) => {
     const { schoolId, userId } = await requireAuth();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { subjects } = await import("@/lib/db/schema");
     await db.delete(subjects).where(and(eq(subjects.id, data.id), eq(subjects.schoolId, schoolId)));
@@ -6036,6 +6117,7 @@ export const setClassSubjects = createServerFn({ method: "POST" })
   .validator((i: unknown) => setClassSubjectsSchema.parse(i))
   .handler(async ({ data }) => {
     const { schoolId, locationId } = await requireAuth();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { classSubjects } = await import("@/lib/db/schema");
 
@@ -6103,6 +6185,7 @@ export const upsertTimetable = createServerFn({ method: "POST" })
   .validator((i: unknown) => upsertTimetableSchema.parse(i))
   .handler(async ({ data }) => {
     const { schoolId, locationId, userId } = await requireAuth();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { timetable } = await import("@/lib/db/schema");
 
@@ -6155,6 +6238,7 @@ export const deleteTimetable = createServerFn({ method: "POST" })
   .validator((i: unknown) => deleteTimetableSchema.parse(i))
   .handler(async ({ data }) => {
     const { schoolId } = await requireAuth();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { timetable } = await import("@/lib/db/schema");
     await db.delete(timetable).where(and(eq(timetable.id, data.id), eq(timetable.schoolId, schoolId)));
@@ -6206,6 +6290,7 @@ export const manageExam = createServerFn({ method: "POST" })
   .validator((i: unknown) => manageExamSchema.parse(i))
   .handler(async ({ data }) => {
     const { schoolId, locationId, userId } = await requireAuth();
+    await assertCanOperateForUser();
     await requireNotReceptionist(userId);
     const { db } = await import("@/lib/db");
     const { exams } = await import("@/lib/db/schema");
@@ -6269,6 +6354,7 @@ export const deleteExam = createServerFn({ method: "POST" })
   .validator((i: unknown) => deleteExamSchema.parse(i))
   .handler(async ({ data }) => {
     const { schoolId, userId } = await requireAuth();
+    await assertCanOperateForUser();
     await requireNotReceptionist(userId);
     const { db } = await import("@/lib/db");
     const { exams } = await import("@/lib/db/schema");
@@ -6290,6 +6376,7 @@ export const upsertExamSubject = createServerFn({ method: "POST" })
   .validator((i: unknown) => upsertExamSubjectSchema.parse(i))
   .handler(async ({ data }) => {
     const { schoolId, userId } = await requireAuth();
+    await assertCanOperateForUser();
     await requireNotReceptionist(userId);
     const { db } = await import("@/lib/db");
     const { examSubjects, exams } = await import("@/lib/db/schema");
@@ -6348,6 +6435,7 @@ export const deleteExamSubject = createServerFn({ method: "POST" })
   .validator((i: unknown) => deleteExamSubjectSchema.parse(i))
   .handler(async ({ data }) => {
     const { schoolId, userId } = await requireAuth();
+    await assertCanOperateForUser();
     await requireNotReceptionist(userId);
     const { db } = await import("@/lib/db");
     const { examSubjects, exams } = await import("@/lib/db/schema");
@@ -6394,6 +6482,7 @@ export const saveStudentMarks = createServerFn({ method: "POST" })
   .validator((i: unknown) => saveStudentMarksSchema.parse(i))
   .handler(async ({ data }) => {
     const { schoolId, userId } = await requireAuth();
+    await assertCanOperateForUser();
     await requireNotReceptionist(userId);
     const { db } = await import("@/lib/db");
     const { studentMarks, examSubjects, exams } = await import("@/lib/db/schema");
@@ -6482,6 +6571,7 @@ export const manageSchoolAnnouncement = createServerFn({ method: "POST" })
   .validator((i: unknown) => manageSchoolAnnouncementSchema.parse(i))
   .handler(async ({ data }) => {
     const { schoolId, locationId, userId, role } = await requireAuth();
+    await assertCanOperateForUser();
     if (!ANNOUNCEMENT_ROLES.has(role ?? "")) throw new Error("Not authorized");
     const { db } = await import("@/lib/db");
     const { schoolAnnouncements } = await import("@/lib/db/schema");
@@ -6593,6 +6683,7 @@ export const deleteSchoolAnnouncement = createServerFn({ method: "POST" })
   .validator((i: unknown) => deleteSchoolAnnouncementSchema.parse(i))
   .handler(async ({ data }) => {
     const { schoolId } = await requireAuth();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { schoolAnnouncements } = await import("@/lib/db/schema");
     await db.delete(schoolAnnouncements).where(and(eq(schoolAnnouncements.id, data.id), eq(schoolAnnouncements.schoolId, schoolId)));
@@ -6606,6 +6697,7 @@ export const setSchoolBoard = createServerFn({ method: "POST" })
   .validator((i: unknown) => setSchoolBoardSchema.parse(i))
   .handler(async ({ data }) => {
     const { schoolId: userSchoolId } = await requireAuth();
+    await assertCanOperateForUser();
     if (userSchoolId !== data.schoolId) throw new Error("Not authorized");
     const { db } = await import("@/lib/db");
     const { schools } = await import("@/lib/db/schema");
@@ -6639,6 +6731,7 @@ export const manageGradingScale = createServerFn({ method: "POST" })
   .validator((i: unknown) => manageGradingScaleSchema.parse(i))
   .handler(async ({ data }) => {
     const { schoolId } = await requireAuth();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { gradingScales } = await import("@/lib/db/schema");
     if (data.id) {
@@ -6681,6 +6774,7 @@ export const deleteGradingScale = createServerFn({ method: "POST" })
   .validator((i: unknown) => deleteGradingScaleSchema.parse(i))
   .handler(async ({ data }) => {
     const { schoolId } = await requireAuth();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { gradingScales } = await import("@/lib/db/schema");
     await db.delete(gradingScales).where(and(eq(gradingScales.id, data.id), eq(gradingScales.schoolId, schoolId)));
@@ -6695,6 +6789,7 @@ export const seedDefaultGradingScales = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     if (data.board === "preschool") throw new Error("No grading scales for preschool");
     const { schoolId } = await requireAuth();
+    await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { gradingScales } = await import("@/lib/db/schema");
 
