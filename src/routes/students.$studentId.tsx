@@ -201,7 +201,7 @@ function StudentDetailPage() {
         .catch(() => {})
         .finally(() => setAttendanceLoading(false));
     }
-    if (activeTab === "reportcards" && studentId) {
+    if ((activeTab === "reportcards" || activeTab === "history") && studentId) {
       setRcLoading(true);
       listReportCardsFn({ data: { studentId } })
         .then((d) => setReportCardsList(d as any[]))
@@ -735,24 +735,53 @@ function StudentDetailPage() {
                   <p className="text-sm text-slate-400">No enrollment records.</p>
                 ) : (
                   <div className="space-y-3">
-                    {detail.enrollments.map((e, i) => (
-                      <div key={i} className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
-                        <div>
-                          <p className="text-sm font-semibold text-slate-800">{e.className}</p>
-                          <p className="text-xs text-slate-400">{e.ageGroup}{e.academicYear ? ` · ${e.academicYear}` : ""}</p>
-                        </div>
-                        <div className="text-right">
-                          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full capitalize ${
-                            e.status === "active" ? "bg-emerald-50 text-emerald-700" :
-                            e.status === "promoted" ? "bg-blue-50 text-blue-700" :
-                            "bg-slate-100 text-slate-500"
-                          }`}>{e.status}</span>
-                          {e.enrolledAt && (
-                            <p className="text-xs text-slate-400 mt-1">{fmtDate(e.enrolledAt)}</p>
+                    {detail.enrollments.map((e, i) => {
+                      const rcs = reportCardsList.filter((rc) => rc.className === e.className);
+                      return (
+                        <div key={i} className="rounded-xl border border-slate-100 p-3 bg-white">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-800">{e.className}</p>
+                              <p className="text-xs text-slate-400">{e.ageGroup}{e.academicYear ? ` · ${e.academicYear}` : ""}</p>
+                            </div>
+                            <div className="text-right">
+                              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full capitalize ${
+                                e.status === "active" ? "bg-emerald-50 text-emerald-700" :
+                                e.status === "promoted" ? "bg-blue-50 text-blue-700" :
+                                "bg-slate-100 text-slate-500"
+                              }`}>{e.status === "promoted" ? "Completed" : e.status}</span>
+                              {e.enrolledAt && (
+                                <p className="text-xs text-slate-400 mt-1">{fmtDate(e.enrolledAt)}</p>
+                              )}
+                            </div>
+                          </div>
+                          {/* Report cards for this class */}
+                          {rcs.length > 0 && (
+                            <div className="mt-2 pt-2 border-t border-slate-100 space-y-1">
+                              {rcs.map((rc) => (
+                                <div key={rc.id} className="flex items-center justify-between">
+                                  <span className="text-xs text-slate-500">
+                                    {rc.academicYear} · {rc.term}
+                                  </span>
+                                  {rc.publicUrl ? (
+                                    <a
+                                      href={rc.publicUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-1 text-xs text-blue-600 hover:underline font-medium"
+                                    >
+                                      <ExternalLink className="w-3 h-3" /> View report card
+                                    </a>
+                                  ) : (
+                                    <span className="text-xs text-slate-300">No file</span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
                           )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </Section>
