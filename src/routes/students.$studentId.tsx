@@ -737,6 +737,14 @@ function StudentDetailPage() {
                   <div className="space-y-3">
                     {detail.enrollments.map((e, i) => {
                       const rcs = reportCardsList.filter((rc) => rc.className === e.className);
+                      const isCurrent = e.classId === detail.student.currentClassId;
+                      const displayStatus = e.status === "promoted" ? "Completed"
+                        : (e.status === "active" && !isCurrent) ? "Graduated"
+                        : e.status;
+                      const badgeCls = displayStatus === "Active" ? "bg-emerald-50 text-emerald-700"
+                        : displayStatus === "Graduated" ? "bg-violet-50 text-violet-700"
+                        : displayStatus === "Completed" ? "bg-blue-50 text-blue-700"
+                        : "bg-slate-100 text-slate-500";
                       return (
                         <div key={i} className="rounded-xl border border-slate-100 p-3 bg-white">
                           <div className="flex items-center justify-between">
@@ -745,11 +753,7 @@ function StudentDetailPage() {
                               <p className="text-xs text-slate-400">{e.ageGroup}{e.academicYear ? ` · ${e.academicYear}` : ""}</p>
                             </div>
                             <div className="text-right">
-                              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full capitalize ${
-                                e.status === "active" ? "bg-emerald-50 text-emerald-700" :
-                                e.status === "promoted" ? "bg-blue-50 text-blue-700" :
-                                "bg-slate-100 text-slate-500"
-                              }`}>{e.status === "promoted" ? "Completed" : e.status}</span>
+                              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full capitalize ${badgeCls}`}>{displayStatus}</span>
                               {e.enrolledAt && (
                                 <p className="text-xs text-slate-400 mt-1">{fmtDate(e.enrolledAt)}</p>
                               )}
