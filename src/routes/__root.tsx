@@ -401,13 +401,13 @@ function AppShell() {
       const adminRoutes = ["/dashboard", "/admissions", "/students", "/students/", "/fees", "/staff", "/staff/", "/classes", "/schools", "/locations", "/curriculum", "/expenses", "/pnl", "/announcements"];
       const accountantRoutes = ["/dashboard", "/fees"];
       const receptionistRoutes = ["/admissions", "/fees", "/exams"];
-      const teacherRoutes = ["/teacher", "/teacher/attendance", "/classes", "/exams", "/curriculum", "/teacher/announcements"];
+      const teacherRoutes = ["/teacher", "/teacher/attendance", "/attendance", "/students", "/academics", "/exams", "/classes", "/curriculum", "/announcements", "/teacher/announcements"];
       const parentRoutes = ["/parent"];
       const superRoutes = ["/super-admin"];
       if (user.role === "teacher" || user.role === "staff") {
-        if (teacherRoutes.includes(pathname)) {
+        if (teacherRoutes.some(r => pathname === r || pathname.startsWith(r + "/"))) {
           // allowed — do nothing
-        } else if (adminRoutes.includes(pathname) || parentRoutes.includes(pathname) || superRoutes.includes(pathname))
+        } else if (adminRoutes.some(r => pathname === r || pathname.startsWith(r + "/")) || parentRoutes.some(r => pathname.startsWith(r)) || superRoutes.some(r => pathname.startsWith(r)))
           navigate({ to: home });
       } else if (user.role === "parent") {
         if (adminRoutes.includes(pathname) || teacherRoutes.includes(pathname) || superRoutes.includes(pathname))
