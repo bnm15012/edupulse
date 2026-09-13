@@ -1082,6 +1082,7 @@ export const getParentPortal = createServerFn({ method: "GET" }).handler(async (
           status: students.status,
           currentClassId: students.currentClassId,
           className: classes.name,
+          classAcademicYear: classes.academicYear,
         })
         .from(students)
         .leftJoin(classes, eq(students.currentClassId, classes.id))

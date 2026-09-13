@@ -12,7 +12,7 @@ export const Route = createFileRoute("/parent")({
 
 type Child = {
   id: number; firstName: string; lastName: string;
-  dateOfBirth: string | null; gender: string | null; bloodGroup: string | null; status: string; currentClassId: number | null; className: string | null;
+  dateOfBirth: string | null; gender: string | null; bloodGroup: string | null; status: string; currentClassId: number | null; className: string | null; classAcademicYear: string | null;
 };
 type Fee = {
   id: number; studentId: number; amount: string;
@@ -257,10 +257,10 @@ function ParentPortal() {
     setAcademicLoading(true);
     setAttendanceSummary([]); setReportCardsList([]); setAnnouncementsList([]); setAcademicReport(null);
 
-    // Derive current academic year: Indian school year Apr–Mar
+    // Use the academic year from the child's current class; fall back to date-derived year
     const now = new Date();
     const yr = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
-    const currentAcademicYear = `${yr}-${String(yr + 1).slice(2)}`;
+    const currentAcademicYear = child.classAcademicYear ?? `${yr}-${String(yr + 1).slice(2)}`;
 
     Promise.all([
       getAttendanceFn({ data: { studentId: childId } }).then((d) => setAttendanceSummary(d as any[])).catch(() => {}),
