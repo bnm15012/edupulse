@@ -32,35 +32,59 @@ const inputCls = "w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-5
 // ─── Consolidated report card — one student, all exams for the year ──────────
 function ConsolidatedReportCard({ report, onClose }: { report: any; onClose?: () => void }) {
   if (!report) return null;
+
+  const handlePrint = () => window.print();
+
+  const handleDownload = () => {
+    // Open print dialog with destination hint for PDF save
+    const style = document.createElement("style");
+    style.id = "__rc_dl_hint";
+    style.textContent = `@page { size: A4; margin: 15mm; }`;
+    document.head.appendChild(style);
+    window.print();
+    setTimeout(() => document.getElementById("__rc_dl_hint")?.remove(), 1000);
+  };
+
+  const addressLine = [report.schoolAddress, report.schoolCity, report.schoolState].filter(Boolean).join(", ");
+
   return (
-    <div className="border border-slate-200 rounded-2xl bg-white overflow-hidden print:border-0">
-      {/* Header */}
-      <div className="flex items-start justify-between px-8 pt-8 pb-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <h2 className="text-xl font-extrabold text-slate-900">Academic Report Card</h2>
-            <span className="px-2 py-0.5 text-xs font-bold uppercase rounded-full bg-blue-100 text-blue-700">{report.board}</span>
+    <div className="border border-slate-200 rounded-2xl bg-white overflow-hidden print:border-0 print:rounded-none print:shadow-none">
+
+      {/* ── School letterhead ── */}
+      <div className="flex items-center gap-5 px-8 pt-8 pb-5 border-b border-slate-200 print:pb-4">
+        {report.schoolLogoUrl && (
+          <img src={report.schoolLogoUrl} alt="School logo" className="h-16 w-16 object-contain rounded-xl border border-slate-100 bg-white p-1 shrink-0" />
+        )}
+        <div className="flex-1 min-w-0">
+          <h1 className="text-lg font-extrabold text-slate-900 leading-tight">{report.schoolName}</h1>
+          {addressLine && <p className="text-xs text-slate-500 mt-0.5">{addressLine}</p>}
+          <div className="flex items-center gap-3 mt-1 flex-wrap">
+            {report.schoolPhone && <span className="text-xs text-slate-400">{report.schoolPhone}</span>}
+            {report.schoolEmail && <span className="text-xs text-slate-400">{report.schoolEmail}</span>}
           </div>
-          <p className="text-sm text-slate-500">{report.schoolName} · {report.academicYear}</p>
+        </div>
+        <div className="text-right shrink-0">
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Academic Report Card</p>
+          <span className="inline-block mt-1 px-2.5 py-0.5 text-xs font-bold uppercase rounded-full bg-blue-100 text-blue-700">{report.board}</span>
+          <p className="text-xs text-slate-500 mt-1">{report.academicYear}</p>
         </div>
         {onClose && (
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 print:hidden"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="ml-2 p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 print:hidden self-start"><X className="w-4 h-4" /></button>
         )}
       </div>
 
-      {/* Student info */}
-      <div className="mx-8 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+      {/* ── Student info ── */}
+      <div className="mx-8 mt-5 mb-5 p-4 bg-slate-50 rounded-xl border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
         <div><p className="text-xs text-slate-400">Student</p><p className="font-bold text-slate-800">{report.student.firstName} {report.student.lastName}</p></div>
         <div><p className="text-xs text-slate-400">Class</p><p className="font-semibold text-slate-700">{report.className}</p></div>
         <div><p className="text-xs text-slate-400">Academic Year</p><p className="font-semibold text-slate-700">{report.academicYear}</p></div>
         <div><p className="text-xs text-slate-400">Board</p><p className="font-semibold text-slate-700">{report.board?.toUpperCase()}</p></div>
       </div>
 
-      {/* One section per exam */}
+      {/* ── One section per exam ── */}
       <div className="px-8 space-y-5 pb-4">
         {report.exams.map((exam: any) => (
           <div key={exam.examId} className="rounded-xl border border-slate-200 overflow-hidden">
-            {/* Exam header */}
             <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-b border-slate-200">
               <div>
                 <p className="text-sm font-bold text-slate-800">{exam.term}</p>
@@ -75,7 +99,6 @@ function ConsolidatedReportCard({ report, onClose }: { report: any; onClose?: ()
                 <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">Results awaited</span>
               )}
             </div>
-            {/* Subject rows */}
             <table className="w-full text-sm">
               <thead className="bg-white border-b border-slate-100">
                 <tr>
@@ -104,9 +127,9 @@ function ConsolidatedReportCard({ report, onClose }: { report: any; onClose?: ()
         ))}
       </div>
 
-      {/* Overall summary */}
+      {/* ── Overall summary ── */}
       {report.overallPercentage && (
-        <div className="mx-8 mb-8 flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-6 py-4">
+        <div className="mx-8 mb-6 flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-6 py-4">
           <div>
             <p className="text-sm font-bold text-blue-800">Overall Result — {report.academicYear}</p>
             <p className="text-xs text-blue-600">{report.className} · {report.board}</p>
@@ -118,10 +141,19 @@ function ConsolidatedReportCard({ report, onClose }: { report: any; onClose?: ()
         </div>
       )}
 
-      {/* Print button */}
-      <div className="px-8 pb-8 print:hidden">
-        <button onClick={() => window.print()} className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg">
-          <Printer className="w-4 h-4" /> Print / Save as PDF
+      {/* ── Actions ── */}
+      <div className="px-8 pb-8 flex items-center gap-3 print:hidden">
+        <button
+          onClick={handlePrint}
+          className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg transition"
+        >
+          <Printer className="w-4 h-4" /> Print
+        </button>
+        <button
+          onClick={handleDownload}
+          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition"
+        >
+          <Download className="w-4 h-4" /> Download PDF
         </button>
       </div>
     </div>

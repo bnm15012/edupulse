@@ -7121,7 +7121,10 @@ export const getStudentAcademicReport = createServerFn({ method: "GET" })
     }).from(students).where(eq(students.id, data.studentId)).limit(1);
     if (!student) throw new Error("Student not found");
 
-    const [school] = await db.select({ board: schools.board, name: schools.name }).from(schools).where(eq(schools.id, student.schoolId)).limit(1);
+    const [school] = await db.select({
+      board: schools.board, name: schools.name, logoUrl: schools.logoUrl,
+      address: schools.address, city: schools.city, state: schools.state, phone: schools.phone, email: schools.email,
+    }).from(schools).where(eq(schools.id, student.schoolId)).limit(1);
     const board = school?.board ?? "generic";
 
     const [classInfo] = await db.select({ name: classes.name, ageGroup: classes.ageGroup }).from(classes).where(eq(classes.id, data.classId)).limit(1);
@@ -7201,7 +7204,14 @@ export const getStudentAcademicReport = createServerFn({ method: "GET" })
     const overallGrade = overallPct !== null ? assignGrade(overallPct) : null;
 
     return {
-      student, board, schoolName: school?.name ?? null,
+      student, board,
+      schoolName: school?.name ?? null,
+      schoolLogoUrl: school?.logoUrl ?? null,
+      schoolAddress: school?.address ?? null,
+      schoolCity: school?.city ?? null,
+      schoolState: school?.state ?? null,
+      schoolPhone: school?.phone ?? null,
+      schoolEmail: school?.email ?? null,
       className: classInfo?.name ?? null, ageGroup: classInfo?.ageGroup ?? null,
       academicYear: data.academicYear,
       exams: examSections,
