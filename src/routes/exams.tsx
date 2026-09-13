@@ -11,7 +11,7 @@ import {
   getStudentsForMarks, listStudentMarks, saveStudentMarks,
   listClasses, listSubjects,
   getSchoolBoard, getExamsPageContext,
-  getStudentAcademicReport, getConsolidatedClassReport,
+  getStudentAcademicReport, getConsolidatedClassReport, markReportCardIssued,
 } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { useToast } from "@/lib/toast";
@@ -190,6 +190,7 @@ function ExamsPage() {
   const saveStudentMarksFn    = useServerFn(saveStudentMarks);
   const getStudentReportFn    = useServerFn(getStudentAcademicReport);
   const getClassReportFn      = useServerFn(getConsolidatedClassReport);
+  const markReportIssuedFn    = useServerFn(markReportCardIssued);
   const getSchoolBoardFn      = useServerFn(getSchoolBoard);
   const getContextFn          = useServerFn(getExamsPageContext);
 
@@ -615,7 +616,11 @@ function ExamsPage() {
                       const list = d.students ?? [];
                       setClassReport(list);
                       if (!list.length) toast("No enrolled students found in this class", "error");
-                      else toast(`${list.length} report cards generated`, "success");
+                      else {
+                        toast(`${list.length} report cards generated`, "success");
+                        // Mark each student's report card as issued so parents can see it
+                        list.forEach((s: any) => markReportIssuedFn({ data: { studentId: s.id, classId: rcClass, academicYear: rcYear } }).catch(() => {}));
+                      }
                     } catch (err: any) {
                       toast(err?.message ?? "Failed to generate report cards", "error");
                     } finally { setClassReportLoading(false); }
@@ -709,6 +714,8 @@ function ExamsPage() {
                 try {
                   const d = await getStudentReportFn({ data: { studentId: Number(rcStudent), classId: rcClass, academicYear: rcYear } });
                   setSingleReport(d);
+                  // Admin: mark as issued so parent can see it was generated
+                  if (isAdmin) markReportIssuedFn({ data: { studentId: Number(rcStudent), classId: rcClass, academicYear: rcYear } }).catch(() => {});
                 } catch (err: any) { toast(err?.message ?? "Failed to load", "error"); }
                 finally { setSingleLoading(false); }
               }}

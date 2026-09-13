@@ -5026,6 +5026,49 @@ export const uploadReportCard = createServerFn({ method: "POST" })
     return { ok: true, id: Number((r as any).insertId), publicUrl, academicYear: data.academicYear, term: data.term };
   });
 
+// ── Mark report card as issued (no PDF — on-screen report) ───────────────────
+const markReportCardIssuedSchema = z.object({
+  studentId:    z.number(),
+  classId:      z.number(),
+  academicYear: z.string(),
+});
+
+export const markReportCardIssued = createServerFn({ method: "POST" })
+  .validator((i: unknown) => markReportCardIssuedSchema.parse(i))
+  .handler(async ({ data }) => {
+    await requireSession();
+    const { db } = await import("@/lib/db");
+    const { users, reportCards } = await import("@/lib/db/schema");
+    const userId = await requireSession();
+    const [user] = await db.select({ schoolId: users.schoolId, locationId: users.locationId, role: users.role })
+      .from(users).where(eq(users.id, userId)).limit(1);
+    if (!user?.schoolId || !user?.locationId) throw new Error("Not authorized");
+    if (!["super_admin","school_admin","location_admin"].includes(user.role ?? "")) throw new Error("Not authorized");
+
+    // Upsert — one record per student+year (avoid duplicates)
+    const existing = await db.select({ id: reportCards.id })
+      .from(reportCards)
+      .where(and(
+        eq(reportCards.studentId, data.studentId),
+        eq(reportCards.academicYear, data.academicYear),
+        eq(reportCards.schoolId, user.schoolId),
+      )).limit(1);
+
+    if (existing.length === 0) {
+      await db.insert(reportCards).values({
+        schoolId:     user.schoolId,
+        locationId:   user.locationId,
+        studentId:    data.studentId,
+        academicYear: data.academicYear,
+        classId:      data.classId,
+        term:         "Full Year",
+        r2Key:        null,
+        publicUrl:    null,
+      });
+    }
+    return { ok: true };
+  });
+
 // ── List report cards for a student (with class name join) ────────────────────
 const listReportCardsSchema = z.object({ studentId: z.number() });
 export const listReportCards = createServerFn({ method: "GET" })
