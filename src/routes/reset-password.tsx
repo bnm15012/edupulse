@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { GraduationCap } from "lucide-react";
+import { EduPulseLogo } from "@/components/edupulse-logo";
 
 export const Route = createFileRoute("/reset-password")({
   component: ResetPassword,
@@ -12,9 +12,7 @@ function ResetPassword() {
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
       <div className="text-center space-y-4">
         <div className="flex justify-center">
-          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-600">
-            <GraduationCap className="h-6 w-6 text-white" />
-          </span>
+          <EduPulseLogo size="lg" />
         </div>
         <p className="text-slate-600 text-sm">Please use the forgot password flow to reset your password.</p>
         <Link to="/forgot-password" className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">

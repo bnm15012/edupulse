@@ -8,7 +8,8 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { confirmEmail } from "@/lib/auth";
-import { Loader2, GraduationCap, CheckCircle2, XCircle } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle } from "lucide-react";
+import { EduPulseLogo } from "@/components/edupulse-logo";
 
 export const Route = createFileRoute("/confirm")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -52,9 +53,7 @@ function ConfirmPage() {
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <div className="max-w-sm w-full text-center space-y-4">
         <div className="flex justify-center">
-          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-600">
-            <GraduationCap className="h-6 w-6 text-white" />
-          </span>
+          <EduPulseLogo size="lg" />
         </div>
         <p className="text-sm font-bold text-slate-800">EduPulse</p>
 

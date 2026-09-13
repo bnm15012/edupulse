@@ -4,7 +4,8 @@ import { useState } from "react";
 import { login } from "@/lib/auth";
 import { roleHome } from "./__root";
 import { useTenant } from "@/lib/tenant";
-import { GraduationCap, Eye, EyeOff, ArrowRight, ShieldCheck, Star } from "lucide-react";
+import { Eye, EyeOff, ArrowRight, ShieldCheck, Star } from "lucide-react";
+import { EduPulseLogo } from "@/components/edupulse-logo";
 
 export const Route = createFileRoute("/login")({
   component: Login,
@@ -80,9 +81,7 @@ function Login() {
         <div className="relative z-10 flex flex-col h-full p-10 xl:p-14">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-              <GraduationCap className="w-5 h-5 text-white" />
-            </div>
+            <EduPulseLogo size="md" />
             <div>
               <div className="text-lg font-bold text-white leading-tight">EduPulse</div>
 
@@ -153,9 +152,7 @@ function Login() {
         <div className="relative w-full max-w-md">
           {/* Mobile logo — top of card area */}
           <Link to="/" className="lg:hidden inline-flex items-center gap-2.5 mb-8">
-            <div className="w-9 h-9 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center ring-1 ring-white/30">
-              <GraduationCap className="w-5 h-5 text-white" />
-            </div>
+            <EduPulseLogo size="md" />
             <span className="text-lg font-bold text-white drop-shadow">EduPulse</span>
           </Link>
 
@@ -164,9 +161,7 @@ function Login() {
             {/* Header */}
             <div className="mb-8">
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-md shadow-blue-200 shrink-0">
-                  <GraduationCap className="w-6 h-6 text-white" />
-                </div>
+                <EduPulseLogo size="lg" />
                 <h1 className="text-2xl font-extrabold text-slate-900">Sign in</h1>
               </div>
               <p className="text-slate-500 text-sm">

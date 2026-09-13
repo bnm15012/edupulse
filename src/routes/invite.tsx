@@ -2,7 +2,8 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { acceptInvite } from "@/lib/auth";
-import { GraduationCap, Eye, EyeOff, ArrowRight, CheckCircle2, ShieldCheck } from "lucide-react";
+import { Eye, EyeOff, ArrowRight, CheckCircle2, ShieldCheck } from "lucide-react";
+import { EduPulseLogo } from "@/components/edupulse-logo";
 import { roleHome } from "./__root";
 
 export const Route = createFileRoute("/invite")({
@@ -54,9 +55,7 @@ function InvitePage() {
         <div className="absolute inset-0 bg-gradient-to-br from-slate-950/85 via-slate-900/60 to-blue-950/70" />
         <div className="relative z-10 flex flex-col h-full p-12">
           <Link to="/" className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-              <GraduationCap className="w-5 h-5 text-white" />
-            </div>
+            <EduPulseLogo size="md" />
             <div>
               <div className="text-lg font-bold text-white">EduPulse</div>
 
@@ -101,9 +100,7 @@ function InvitePage() {
         <div className="relative w-full max-w-md">
           {/* Mobile logo */}
           <Link to="/" className="lg:hidden inline-flex items-center gap-2.5 mb-8">
-            <div className="w-9 h-9 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center ring-1 ring-white/30">
-              <GraduationCap className="w-5 h-5 text-white" />
-            </div>
+            <EduPulseLogo size="md" />
             <span className="text-lg font-bold text-white drop-shadow">EduPulse</span>
           </Link>
 

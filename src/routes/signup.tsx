@@ -2,7 +2,8 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { signup } from "@/lib/auth";
-import { GraduationCap, CheckCircle2, Eye, EyeOff, ArrowRight, Building2, User, Lock, ShieldCheck, Mail } from "lucide-react";
+import { CheckCircle2, Eye, EyeOff, ArrowRight, Building2, User, Lock, ShieldCheck, Mail } from "lucide-react";
+import { EduPulseLogo } from "@/components/edupulse-logo";
 
 export const Route = createFileRoute("/signup")({
   component: Signup,
@@ -136,9 +137,7 @@ function Signup() {
         <div className="relative z-10 flex flex-col h-full p-10 xl:p-12">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-              <GraduationCap className="w-5 h-5 text-white" />
-            </div>
+            <EduPulseLogo size="md" />
             <div>
               <div className="text-lg font-bold text-white leading-tight">EduPulse</div>
 
@@ -197,9 +196,7 @@ function Signup() {
         <div className="relative w-full max-w-xl py-2">
           {/* Mobile logo */}
           <Link to="/" className="lg:hidden inline-flex items-center gap-2.5 mb-6">
-            <div className="w-9 h-9 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center ring-1 ring-white/30">
-              <GraduationCap className="w-5 h-5 text-white" />
-            </div>
+            <EduPulseLogo size="md" />
             <span className="text-lg font-bold text-white drop-shadow">EduPulse</span>
           </Link>
 
@@ -209,9 +206,7 @@ function Signup() {
             {step < 2 && (
               <div className="mb-7">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-md shadow-blue-200 shrink-0">
-                    <GraduationCap className="w-6 h-6 text-white" />
-                  </div>
+                  <EduPulseLogo size="lg" />
                   <h1 className="text-2xl font-extrabold text-slate-900">Create your account</h1>
                 </div>
                 <p className="text-slate-500 text-sm">
