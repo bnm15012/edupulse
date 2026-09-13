@@ -2349,6 +2349,150 @@ export const addStudent = createServerFn({ method: "POST" })
     return { ok: true, studentId };
   });
 
+// ── CSV Bulk Import ────────────────────────────────────────────────────────────
+const csvImportRowSchema = z.object({
+  firstName:         z.string().trim().min(1).max(255),
+  lastName:          z.string().trim().max(255).default(""),
+  dateOfBirth:       z.string().optional(),
+  gender:            z.enum(["male", "female", "other", "prefer_not_to_say"]).optional(),
+  bloodGroup:        z.string().trim().max(10).optional(),
+  className:         z.string().trim().optional(),
+  parentName:        z.string().trim().min(1).max(255),
+  parentPhone:       z.string().trim().max(50).optional(),
+  parentEmail:       z.string().trim().max(255).optional(),
+  parentRelation:    z.enum(["mother", "father", "guardian", "other"]).default("guardian"),
+  emergencyName:     z.string().trim().max(255).optional(),
+  emergencyPhone:    z.string().trim().max(50).optional(),
+  allergies:         z.string().max(1000).optional(),
+});
+
+const importStudentsCSVSchema = z.object({
+  schoolId:   z.number(),
+  locationId: z.number(),
+  rows:       z.array(csvImportRowSchema).min(1).max(500),
+});
+
+export const importStudentsFromCSV = createServerFn({ method: "POST" })
+  .validator((input: unknown) => importStudentsCSVSchema.parse(input))
+  .handler(async ({ data }) => {
+    await requireAuth(data.schoolId, data.locationId);
+    await assertCanOperateForUser();
+
+    const { db } = await import("@/lib/db");
+    const { students, parents, emergencyContacts, medicalNotes, classes, classEnrollments } = await import("@/lib/db/schema");
+
+    // Fetch all active classes for this school+location to resolve class names
+    const classRows = await db.select({ id: classes.id, name: classes.name })
+      .from(classes)
+      .where(and(eq(classes.schoolId, data.schoolId), eq(classes.locationId, data.locationId), eq(classes.status, "active")));
+    const classMap = new Map(classRows.map((c) => [c.name.trim().toLowerCase(), c.id]));
+
+    const imported: number[] = [];
+    const skipped: { row: number; name: string; reason: string }[] = [];
+
+    for (let i = 0; i < data.rows.length; i++) {
+      const row = data.rows[i];
+      const rowNum = i + 1;
+      const displayName = `${row.firstName} ${row.lastName}`.trim();
+
+      try {
+        // Resolve class
+        const classId = row.className ? classMap.get(row.className.trim().toLowerCase()) ?? null : null;
+        if (row.className && !classId) {
+          skipped.push({ row: rowNum, name: displayName, reason: `Class "${row.className}" not found` });
+          continue;
+        }
+
+        // Duplicate guard
+        const dob = row.dateOfBirth ? new Date(row.dateOfBirth) : null;
+        const [dup] = await db.select({ id: students.id }).from(students)
+          .where(and(
+            eq(students.schoolId, data.schoolId),
+            eq(students.locationId, data.locationId),
+            eq(students.firstName, row.firstName),
+            eq(students.lastName, row.lastName),
+            dob ? eq(students.dateOfBirth, dob) : isNull(students.dateOfBirth),
+          )).limit(1);
+        if (dup) {
+          skipped.push({ row: rowNum, name: displayName, reason: "Duplicate — student already exists" });
+          continue;
+        }
+
+        // Insert student
+        const [res] = await db.insert(students).values({
+          schoolId: data.schoolId,
+          locationId: data.locationId,
+          firstName: row.firstName,
+          lastName: row.lastName,
+          dateOfBirth: dob,
+          gender: row.gender ?? null,
+          bloodGroup: row.bloodGroup || null,
+          currentClassId: classId,
+          status: "enrolled",
+        });
+        const studentId = Number((res as any).insertId);
+        await db.update(students).set({ admissionNumber: `EDP-${studentId}` }).where(eq(students.id, studentId));
+
+        // Parent
+        await db.insert(parents).values({
+          schoolId: data.schoolId,
+          locationId: data.locationId,
+          studentId,
+          name: row.parentName,
+          email: row.parentEmail ? normalizeEmail(row.parentEmail) : null,
+          phone: row.parentPhone || null,
+          relation: row.parentRelation,
+          isPrimary: 1,
+          isEmergency: 0,
+        });
+
+        // Medical
+        if (row.allergies) {
+          await db.insert(medicalNotes).values({
+            schoolId: data.schoolId,
+            locationId: data.locationId,
+            studentId,
+            allergies: row.allergies || null,
+            conditions: null,
+            medications: null,
+            notes: null,
+          });
+        }
+
+        // Emergency contact
+        if (row.emergencyName && row.emergencyPhone) {
+          await db.insert(emergencyContacts).values({
+            schoolId: data.schoolId,
+            locationId: data.locationId,
+            studentId,
+            name: row.emergencyName,
+            phone: row.emergencyPhone,
+            relation: "guardian",
+          });
+        }
+
+        // Class enrollment
+        if (classId) {
+          await db.insert(classEnrollments).values({
+            schoolId: data.schoolId,
+            locationId: data.locationId,
+            studentId,
+            classId,
+            academicYear: "",
+            status: "active",
+          });
+        }
+
+        imported.push(studentId);
+      } catch (err: any) {
+        skipped.push({ row: rowNum, name: displayName, reason: err?.message ?? "Unknown error" });
+      }
+    }
+
+    return { imported: imported.length, skipped };
+  });
+
+// ── Update student ─────────────────────────────────────────────────────────────
 const updateStudentSchema = z.object({
   studentId: z.number(),
   firstName: z.string().trim().min(1).max(255),

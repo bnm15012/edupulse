@@ -12,6 +12,7 @@ import { useTenant } from "@/lib/tenant";
 import { useToast } from "@/lib/toast";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PlanLimitDialog, parsePlanLimitError } from "@/components/plan-limit-dialog";
+import { CSVImportModal } from "@/components/csv-import-modal";
 import { fmtDate } from "@/lib/utils";
 import { usePagination } from "@/lib/usePagination";
 import { Pagination } from "@/components/pagination";
@@ -327,6 +328,8 @@ function Students() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [confirmStudent, setConfirmStudent] = useState<StudentRow | null>(null);
   const [isAdmin, setIsAdmin] = useState(true);
+  const [csvOpen, setCsvOpen] = useState(false);
+  const [userRole, setUserRole] = useState<string>("");
 
   const PAGE_SIZE = 12;
 
@@ -342,7 +345,7 @@ function Students() {
   };
 
   useEffect(() => { load(); }, [tenant.schoolId, tenant.locationId]);
-  useEffect(() => { sessionFn().then((u: any) => u && setIsAdmin(ADMIN_ROLES.includes(u.role))); }, []);
+  useEffect(() => { sessionFn().then((u: any) => { if (u) { setIsAdmin(ADMIN_ROLES.includes(u.role)); setUserRole(u.role); } }); }, []);
 
   const handleDelete = (s: StudentRow, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -387,13 +390,24 @@ function Students() {
           </p>
         </div>
         {isAdmin && (
-          <button
-            onClick={() => setAddOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition shadow-sm shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add Student</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {(userRole === "super_admin" || userRole === "school_admin") && (
+              <button
+                onClick={() => setCsvOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded-xl transition shadow-sm shrink-0"
+              >
+                <Upload className="w-4 h-4" />
+                <span>Import CSV</span>
+              </button>
+            )}
+            <button
+              onClick={() => setAddOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition shadow-sm shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Student</span>
+            </button>
+          </div>
         )}
       </div>
 
@@ -547,6 +561,15 @@ function Students() {
         onConfirm={doDelete}
         onCancel={() => setConfirmStudent(null)}
       />
+
+      {csvOpen && (
+        <CSVImportModal
+          schoolId={tenant.schoolId}
+          locationId={tenant.locationId}
+          onClose={() => setCsvOpen(false)}
+          onImported={() => { load(); setCsvOpen(false); }}
+        />
+      )}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import {
   Pencil, Save, XCircle, ArrowRight, CheckCircle2, Trash2, Mail, Loader2,
 } from "lucide-react";
 import { listInquiries, addInquiry, updateInquiry, archiveInquiry, sendParentInvite, enrollFromAdmission, listClassesForSchool, getSession } from "@/lib/auth";
+import { CSVImportModal } from "@/components/csv-import-modal";
 import { useTenant } from "@/lib/tenant";
 import { useToast } from "@/lib/toast";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -733,6 +734,8 @@ function Admissions() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [confirmInquiry, setConfirmInquiry] = useState<Inquiry | null>(null);
   const [isAdmin, setIsAdmin] = useState(true);
+  const [userRole, setUserRole] = useState<string>("");
+  const [csvOpen, setCsvOpen] = useState(false);
 
   const PAGE_SIZE = 12;
 
@@ -745,7 +748,7 @@ function Admissions() {
   };
 
   useEffect(() => { load(); }, [tenant.schoolId, tenant.locationId]);
-  useEffect(() => { sessionFn().then((u: any) => u && setIsAdmin(["super_admin","school_admin","location_admin"].includes(u.role))); }, []);
+  useEffect(() => { sessionFn().then((u: any) => { if (u) { setIsAdmin(["super_admin","school_admin","location_admin"].includes(u.role)); setUserRole(u.role); } }); }, []);
 
   const handleDelete = (inq: Inquiry, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -796,13 +799,24 @@ function Admissions() {
           </p>
         </div>
         {isAdmin && (
-          <button
-            onClick={() => setAddOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition shadow-sm"
-          >
-            <Plus className="w-4 h-4" />
-            Add Inquiry
-          </button>
+          <div className="flex items-center gap-2">
+            {(userRole === "super_admin" || userRole === "school_admin") && (
+              <button
+                onClick={() => setCsvOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded-xl transition shadow-sm shrink-0"
+              >
+                <FileText className="w-4 h-4" />
+                Import CSV
+              </button>
+            )}
+            <button
+              onClick={() => setAddOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              Add Inquiry
+            </button>
+          </div>
         )}
       </div>
 
@@ -979,6 +993,15 @@ function Admissions() {
         onConfirm={doDelete}
         onCancel={() => setConfirmInquiry(null)}
       />
+
+      {csvOpen && (
+        <CSVImportModal
+          schoolId={tenant.schoolId}
+          locationId={tenant.locationId}
+          onClose={() => setCsvOpen(false)}
+          onImported={() => { load(); setCsvOpen(false); }}
+        />
+      )}
     </div>
   );
 }
