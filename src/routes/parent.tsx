@@ -271,8 +271,6 @@ function ParentPortal() {
         .then((reports: any) => {
           const list = (reports ?? []) as any[];
           setAllYearsReports(list);
-          // Auto-expand the most recent year
-          if (list.length > 0) setExpandedYear(list[0].academicYear);
         }).catch(() => {}),
     ]).finally(() => setAcademicLoading(false));
   }, [activeChild, data?.children.length]);
