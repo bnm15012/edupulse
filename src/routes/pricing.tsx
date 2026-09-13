@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { CheckCircle2, ArrowRight, GraduationCap, Zap, Building2, Users, MessageCircle } from "lucide-react";
+import { CheckCircle2, ArrowRight, Zap, Building2, Users, MessageCircle } from "lucide-react";
 import { PublicLayout } from "@/components/public-layout";
+import { EduPulseLogo } from "@/components/edupulse-logo";
 
 export const Route = createFileRoute("/pricing")({
   component: PricingPage,
@@ -237,8 +238,8 @@ function PricingPage() {
       {/* Bottom CTA */}
       <section className="bg-slate-50 border-t border-slate-200 py-16 text-center">
         <div className="max-w-xl mx-auto px-6">
-          <div className="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-5">
-            <GraduationCap className="w-6 h-6 text-blue-600" />
+          <div className="flex justify-center mb-5">
+            <EduPulseLogo size="lg" />
           </div>
           <h2 className="text-2xl font-extrabold text-slate-900 mb-3">Ready to get started?</h2>
           <p className="text-slate-500 text-sm mb-8 leading-relaxed">
