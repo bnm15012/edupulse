@@ -883,6 +883,14 @@ function ParentPortal() {
                               {exam.hasMarks && <p className="font-bold text-blue-700">{exam.termPercentage}% · {exam.termGrade}</p>}
                             </div>
                             <table className="w-full">
+                              <thead>
+                                <tr className="border-b border-slate-100 bg-slate-50/60">
+                                  <th className="px-3 py-1.5 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Subject</th>
+                                  <th className="px-2 py-1.5 text-center text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Max</th>
+                                  <th className="px-2 py-1.5 text-center text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Scored</th>
+                                  <th className="px-2 py-1.5 text-center text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Grade</th>
+                                </tr>
+                              </thead>
                               <tbody className="divide-y divide-slate-50">
                                 {exam.subjects.map((s: any, i: number) => (
                                   <tr key={i}>
