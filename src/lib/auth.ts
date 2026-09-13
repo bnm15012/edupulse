@@ -6936,17 +6936,19 @@ export const seedDefaultGradingScales = createServerFn({ method: "POST" })
 
     const rows = defaults[data.board];
     const existing = await db.select({ id: gradingScales.id }).from(gradingScales).where(and(eq(gradingScales.schoolId, schoolId), eq(gradingScales.board, data.board))).limit(1);
-    if (!existing.length) {
-      await db.insert(gradingScales).values(rows.map((r) => ({
-        schoolId,
-        board: data.board,
-        name: r.name,
-        minPercentage: String(r.min),
-        maxPercentage: String(r.max),
-        gradePoint: r.gp != null ? String(r.gp) : null,
-      })));
+    if (existing.length) {
+      // Already seeded — skip to avoid duplicates
+      return { ok: true, alreadyExisted: true };
     }
-    return { ok: true };
+    await db.insert(gradingScales).values(rows.map((r) => ({
+      schoolId,
+      board: data.board,
+      name: r.name,
+      minPercentage: String(r.min),
+      maxPercentage: String(r.max),
+      gradePoint: r.gp != null ? String(r.gp) : null,
+    })));
+    return { ok: true, alreadyExisted: false };
   });
 
 function gradeForPercentage(pct: number, scales: { name: string; minPercentage: string | number; maxPercentage: string | number; gradePoint?: string | number | null }[]) {
