@@ -233,6 +233,20 @@ export const login = createServerFn({ method: "POST" })
       throw new Error("Please confirm your email before signing in. Check your inbox for the confirmation link.");
     }
 
+    // Check school suspension — block school/location admins, teachers, staff
+    // but allow parents to still log in (they only see their child's data)
+    if (user.schoolId && user.role !== "parent" && user.role !== "super_admin") {
+      const { schools: schoolsTable } = await import("@/lib/db/schema");
+      const [schoolRow] = await db
+        .select({ status: schoolsTable.status })
+        .from(schoolsTable)
+        .where(eq(schoolsTable.id, user.schoolId))
+        .limit(1);
+      if (schoolRow?.status === "suspended") {
+        throw new Error("Your school account has been suspended. Please contact EduPulse support.");
+      }
+    }
+
     await db.update(users).set({ lastLogin: new Date() }).where(eq(users.id, user.id));
 
     const token = await createSessionToken({
@@ -330,7 +344,7 @@ export const getSession = createServerFn({ method: "GET" }).handler(async () => 
     if (!userId) return null;
 
     const { db } = await import("@/lib/db");
-    const { users } = await import("@/lib/db/schema");
+    const { users, schools } = await import("@/lib/db/schema");
     const [user] = await db
       .select({
         id: users.id,
@@ -347,7 +361,19 @@ export const getSession = createServerFn({ method: "GET" }).handler(async () => 
       .where(eq(users.id, userId))
       .limit(1);
 
-    return user ?? null;
+    if (!user) return null;
+
+    // If the school is suspended, invalidate sessions for all non-parent roles
+    if (user.schoolId && user.role !== "parent" && user.role !== "super_admin") {
+      const [schoolRow] = await db
+        .select({ status: schools.status })
+        .from(schools)
+        .where(eq(schools.id, user.schoolId))
+        .limit(1);
+      if (schoolRow?.status === "suspended") return null;
+    }
+
+    return user;
   } catch {
     return null;
   }
