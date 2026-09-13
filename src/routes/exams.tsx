@@ -639,7 +639,15 @@ function ExamsPage() {
                       setClassReport(list);
                       if (!list.length) toast("No enrolled students found in this class", "error");
                       else {
-                        toast(`${list.length} report cards generated`, "success");
+                        // Count students with incomplete marks (any subject missing marks in any exam)
+                        const incomplete = list.filter((s: any) =>
+                          s.exams?.some((e: any) => e.subjects?.some((sub: any) => sub.marks === null))
+                        );
+                        if (incomplete.length > 0) {
+                          toast(`⚠️ ${incomplete.length} of ${list.length} students have incomplete marks — report cards generated with gaps`, "error");
+                        } else {
+                          toast(`${list.length} report cards generated`, "success");
+                        }
                         // Mark each student's report card as issued so parents can see it
                         list.forEach((s: any) => markReportIssuedFn({ data: { studentId: s.id, classId: rcClass, academicYear: rcYear } }).catch(() => {}));
                       }
@@ -671,12 +679,21 @@ function ExamsPage() {
                 <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
                   {classReport.map((rc: any, i: number) => {
                     const hasAnyMarks = rc.exams?.some((e: any) => e.hasMarks);
+                    const missingCount = rc.exams?.reduce((acc: number, e: any) =>
+                      acc + (e.subjects?.filter((s: any) => s.marks === null).length ?? 0), 0) ?? 0;
                     return (
-                      <div key={i} className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition">
+                      <div key={i} className={`flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition ${missingCount > 0 ? "bg-amber-50/50" : ""}`}>
                         <div className="flex items-center gap-3">
                           <span className="text-xs text-slate-400 w-6 shrink-0">{i + 1}</span>
                           <div>
-                            <p className="text-sm font-semibold text-slate-800">{rc.student?.firstName} {rc.student?.lastName}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-semibold text-slate-800">{rc.student?.firstName} {rc.student?.lastName}</p>
+                              {missingCount > 0 && (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                                  {missingCount} missing
+                                </span>
+                              )}
+                            </div>
                             {hasAnyMarks ? (
                               <p className="text-xs text-slate-500">
                                 Overall: <span className="font-bold text-blue-700">{rc.overallPercentage ?? "—"}%</span>
@@ -743,8 +760,15 @@ function ExamsPage() {
                 if (!rcClass || !rcStudent || !rcYear) return;
                 setSingleLoading(true); setSingleReport(null);
                 try {
-                  const d = await getStudentReportFn({ data: { studentId: Number(rcStudent), classId: rcClass, academicYear: rcYear } });
+                  const d = await getStudentReportFn({ data: { studentId: Number(rcStudent), classId: rcClass, academicYear: rcYear } }) as any;
                   setSingleReport(d);
+                  // Warn if any subject marks are missing
+                  const missingSubjects = d?.exams?.flatMap((e: any) =>
+                    e.subjects?.filter((s: any) => s.marks === null).map((s: any) => `${s.subjectName} (${e.term})`)
+                  ) ?? [];
+                  if (missingSubjects.length > 0) {
+                    toast(`⚠️ Marks missing for: ${missingSubjects.slice(0, 3).join(", ")}${missingSubjects.length > 3 ? ` +${missingSubjects.length - 3} more` : ""}`, "error");
+                  }
                   // Admin: mark as issued so parent can see it was generated
                   if (isAdmin) markReportIssuedFn({ data: { studentId: Number(rcStudent), classId: rcClass, academicYear: rcYear } }).catch(() => {});
                 } catch (err: any) { toast(err?.message ?? "Failed to load", "error"); }
