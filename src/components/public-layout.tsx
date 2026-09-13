@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { GraduationCap, Facebook, Twitter, Linkedin, Mail, Phone, MapPin, Menu, X } from "lucide-react";
+import { Facebook, Twitter, Linkedin, Mail, Phone, MapPin, Menu, X } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { InstallAppButton } from "@/components/install-app-button";
 
@@ -21,8 +21,13 @@ export function PublicLayout({
           <div className="w-full h-16 flex items-center px-5 md:px-8 xl:px-16">
             {/* Logo — left */}
             <Link to="/" className="flex items-center gap-2.5 text-xl font-bold text-slate-900 shrink-0">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <GraduationCap className="w-5 h-5 text-white" />
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-indigo-600 shrink-0">
+                <svg viewBox="0 0 64 64" className="w-8 h-8" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <polygon points="32,13 52,23 32,33 12,23" fill="white" opacity="0.95"/>
+                  <rect x="48" y="23" width="2.5" height="11" rx="1.25" fill="white" opacity="0.8"/>
+                  <circle cx="49.25" cy="35.5" r="2.5" fill="white" opacity="0.8"/>
+                  <polyline points="12,44 20,44 24,38 28,51 32,41 36,44 52,44" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
               </div>
               <span>EduPulse</span>
             </Link>
@@ -143,8 +148,13 @@ export function PublicLayout({
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-10">
               <div className="lg:col-span-2">
                 <div className="flex items-center gap-2.5 text-xl font-bold text-white mb-4">
-                  <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
-                    <GraduationCap className="w-5 h-5 text-white" />
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-indigo-600 shrink-0">
+                    <svg viewBox="0 0 64 64" className="w-8 h-8" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <polygon points="32,13 52,23 32,33 12,23" fill="white" opacity="0.95"/>
+                      <rect x="48" y="23" width="2.5" height="11" rx="1.25" fill="white" opacity="0.8"/>
+                      <circle cx="49.25" cy="35.5" r="2.5" fill="white" opacity="0.8"/>
+                      <polyline points="12,44 20,44 24,38 28,51 32,41 36,44 52,44" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
                   </div>
                   <span>EduPulse</span>
                 </div>
