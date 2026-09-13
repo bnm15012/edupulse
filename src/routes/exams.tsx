@@ -39,108 +39,60 @@ function ConsolidatedReportCard({ report, onClose }: { report: any; onClose?: ()
 
   const handlePrint = () => window.print();
 
-  const handleDownload = useCallback(async () => {
+  const handleDownload = useCallback(() => {
     if (!pdfRef.current) return;
     setPdfLoading(true);
 
-    // html2canvas can't parse oklch() (Tailwind v4 default).
-    // Inject a style that resets all CSS custom properties to safe hex values
-    // on just our element before capture, then remove after.
-    const safeStyle = document.createElement("style");
-    safeStyle.id = "__rc_oklch_fix";
-    safeStyle.textContent = `
-      #rc-pdf-capture, #rc-pdf-capture * {
-        --tw-ring-color: #bfdbfe !important;
-        color-scheme: light !important;
-      }
-    `;
-    document.head.appendChild(safeStyle);
-    // Force computed styles to use hex by cloning into an isolated div with explicit styles
-    const el = pdfRef.current;
-
+    // Collect all computed styles from the page's stylesheets as plain text,
+    // then open a new window with the report HTML + those styles + an @page A4 rule,
+    // and trigger print — the browser's built-in PDF renderer handles oklch fine.
     try {
-      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
-        import("html2canvas"),
-        import("jspdf"),
-      ]);
+      const el = pdfRef.current;
 
-      const canvas = await html2canvas(el, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: "#ffffff",
-        onclone: (clonedDoc: Document) => {
-          // Tailwind v4 uses oklch() everywhere in its CSS.
-          // html2canvas cannot parse oklch() — patch all <style> and <link> stylesheet
-          // text in the cloned document, replacing oklch(...) with rgb equivalents.
-          const oklchToHex = (css: string) =>
-            css.replace(/oklch\([^)]+\)/g, (match) => {
-              // Map known Tailwind oklch tokens to hex by checking L value ranges
-              // This is a best-effort mapping for the colours used in the report card
-              try {
-                const parts = match.slice(6, -1).trim().split(/[\s/,]+/);
-                const l = parseFloat(parts[0]);
-                if (l > 0.95) return "#f8fafc"; // near-white → slate-50
-                if (l > 0.90) return "#f1f5f9"; // slate-100
-                if (l > 0.85) return "#e2e8f0"; // slate-200
-                if (l > 0.75) return "#cbd5e1"; // slate-300
-                if (l > 0.60) return "#94a3b8"; // slate-400
-                if (l > 0.50) return "#64748b"; // slate-500
-                if (l > 0.40) return "#475569"; // slate-600
-                if (l > 0.30) return "#334155"; // slate-700
-                if (l > 0.20) return "#1e293b"; // slate-800
-                return "#0f172a";               // slate-900
-              } catch { return "#1e293b"; }
-            });
-
-          // Patch all inline <style> tags
-          clonedDoc.querySelectorAll<HTMLStyleElement>("style").forEach((s) => {
-            s.textContent = oklchToHex(s.textContent ?? "");
+      // Gather all stylesheet rules as text (skipping cross-origin sheets)
+      let cssText = "@page { size: A4 portrait; margin: 10mm 12mm; }\n";
+      cssText += "body { margin: 0; padding: 0; background: white; }\n";
+      Array.from(document.styleSheets).forEach((sheet) => {
+        try {
+          Array.from(sheet.cssRules ?? []).forEach((rule) => {
+            cssText += rule.cssText + "\n";
           });
-
-          // Patch all inline style attributes
-          clonedDoc.querySelectorAll<HTMLElement>("[style]").forEach((node) => {
-            const inl = node.getAttribute("style") ?? "";
-            if (inl.includes("oklch")) node.setAttribute("style", oklchToHex(inl));
-          });
-        },
+        } catch { /* cross-origin sheet — skip */ }
       });
 
-      const imgData = canvas.toDataURL("image/jpeg", 0.97);
-      const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
-      const pageW = pdf.internal.pageSize.getWidth();
-      const pageH = pdf.internal.pageSize.getHeight();
-      const margin = 10;
-      const imgW = pageW - margin * 2;
-      const imgH = (canvas.height * imgW) / canvas.width;
+      const studentName = `${report.student.firstName} ${report.student.lastName}`;
+      const win = window.open("", "_blank", "width=900,height=1200");
+      if (!win) { setPdfLoading(false); return; }
 
-      let y = margin;
-      let remaining = imgH;
-      let srcY = 0;
-      const contentH = pageH - margin * 2;
+      win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>ReportCard_${studentName}_${report.academicYear}</title>
+  <style>${cssText}</style>
+</head>
+<body>${el.outerHTML}</body>
+</html>`);
+      win.document.close();
 
-      // Slice into A4 pages if content is taller than one page
-      while (remaining > 0) {
-        const sliceH = Math.min(remaining, contentH);
-        const sliceCanvas = document.createElement("canvas");
-        const ratio = canvas.width / imgW;
-        sliceCanvas.width = canvas.width;
-        sliceCanvas.height = sliceH * ratio;
-        const ctx = sliceCanvas.getContext("2d")!;
-        ctx.drawImage(canvas, 0, srcY * ratio, canvas.width, sliceH * ratio, 0, 0, canvas.width, sliceH * ratio);
-        const sliceData = sliceCanvas.toDataURL("image/jpeg", 0.97);
-        if (srcY > 0) { pdf.addPage(); y = margin; }
-        pdf.addImage(sliceData, "JPEG", margin, y, imgW, sliceH);
-        srcY += sliceH;
-        remaining -= sliceH;
-      }
-
-      const studentName = `${report.student.firstName}_${report.student.lastName}`.replace(/\s+/g, "_");
-      pdf.save(`ReportCard_${studentName}_${report.academicYear}.pdf`);
+      // Wait for fonts/images then print
+      win.onload = () => {
+        setTimeout(() => {
+          win.focus();
+          win.print();
+          setPdfLoading(false);
+        }, 800);
+      };
+      // Fallback if onload already fired
+      setTimeout(() => {
+        if (!win.closed) {
+          win.focus();
+          win.print();
+        }
+        setPdfLoading(false);
+      }, 2000);
     } catch (e) {
       console.error("PDF generation failed", e);
-    } finally {
-      document.getElementById("__rc_oklch_fix")?.remove();
       setPdfLoading(false);
     }
   }, [report]);
