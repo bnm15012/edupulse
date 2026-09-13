@@ -7097,6 +7097,175 @@ export const getReportCardData = createServerFn({ method: "GET" })
   });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// EXAMS PAGE CONTEXT — returns role + teacher's assigned classIds
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const getExamsPageContext = createServerFn({ method: "GET" }).handler(async () => {
+  const userId = await requireSession();
+  const { db } = await import("@/lib/db");
+  const { users, staff, staffClassAssignments } = await import("@/lib/db/schema");
+
+  const [user] = await db.select({ role: users.role, schoolId: users.schoolId, locationId: users.locationId })
+    .from(users).where(eq(users.id, userId)).limit(1);
+  if (!user) throw new Error("Not authenticated");
+
+  const ADMIN_ROLES = ["school_admin", "location_admin", "super_admin"];
+  const isAdmin = ADMIN_ROLES.includes(user.role ?? "");
+
+  // Teachers: fetch only their assigned class IDs
+  let assignedClassIds: number[] = [];
+  if (!isAdmin) {
+    const [staffRecord] = await db.select({ id: staff.id })
+      .from(staff)
+      .where(and(eq(staff.schoolId, user.schoolId), eq(staff.userId, userId)))
+      .limit(1);
+    if (staffRecord) {
+      const rows = await db.select({ classId: staffClassAssignments.classId })
+        .from(staffClassAssignments)
+        .where(and(
+          eq(staffClassAssignments.staffId, staffRecord.id),
+          eq(staffClassAssignments.locationId, user.locationId!),
+        ));
+      assignedClassIds = rows.map((r) => r.classId);
+    }
+  }
+
+  return { role: user.role ?? "teacher", isAdmin, assignedClassIds };
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BULK REPORT CARD GENERATION — generates for all students in a class+exam
+// ─────────────────────────────────────────────────────────────────────────────
+
+const bulkReportCardSchema = z.object({
+  classId: z.number(),
+  academicYear: z.string(),
+  term: z.string(),
+});
+
+export const getBulkReportCardData = createServerFn({ method: "GET" })
+  .validator((i: unknown) => bulkReportCardSchema.parse(i))
+  .handler(async ({ data }) => {
+    await requireSession();
+    const { db } = await import("@/lib/db");
+    const { students, classEnrollments, studentMarks, examSubjects, exams, subjects, classes, schools, gradingScales } = await import("@/lib/db/schema");
+
+    // All actively enrolled students in this class
+    const enrolled = await db
+      .select({ id: students.id, firstName: students.firstName, lastName: students.lastName, schoolId: students.schoolId })
+      .from(students)
+      .innerJoin(classEnrollments, eq(classEnrollments.studentId, students.id))
+      .where(and(
+        eq(classEnrollments.classId, data.classId),
+        eq(classEnrollments.status, "active"),
+      ));
+
+    if (!enrolled.length) return { students: [] };
+
+    const firstStudent = enrolled[0];
+    const [school] = await db.select({ board: schools.board }).from(schools).where(eq(schools.id, firstStudent.schoolId)).limit(1);
+    const board = school?.board ?? "generic";
+
+    const [classInfo] = await db.select({ name: classes.name, ageGroup: classes.ageGroup }).from(classes).where(eq(classes.id, data.classId)).limit(1);
+
+    const scales = await db.select({
+      name: gradingScales.name,
+      minPercentage: gradingScales.minPercentage,
+      maxPercentage: gradingScales.maxPercentage,
+      gradePoint: gradingScales.gradePoint,
+    }).from(gradingScales).where(and(eq(gradingScales.schoolId, firstStudent.schoolId), eq(gradingScales.board, board)));
+
+    // Find matching exams for this class + year + term
+    const matchingExams = await db.select({ id: exams.id })
+      .from(exams)
+      .where(and(
+        eq(exams.schoolId, firstStudent.schoolId),
+        eq(exams.classId, data.classId),
+        eq(exams.academicYear, data.academicYear),
+        eq(exams.term, data.term),
+      ));
+
+    const examIds = matchingExams.map((e) => e.id);
+
+    // Fetch all exam subjects for these exams
+    const allExamSubjects = examIds.length
+      ? await db.select({
+          id: examSubjects.id,
+          subjectId: examSubjects.subjectId,
+          maxMarks: examSubjects.maxMarks,
+          subjectName: subjects.name,
+        })
+        .from(examSubjects)
+        .innerJoin(subjects, eq(examSubjects.subjectId, subjects.id))
+        .where(inArray(examSubjects.examId, examIds))
+      : [];
+
+    // Helper to assign grade from scale
+    function assignGrade(pct: number): { name: string; gradePoint: string } | null {
+      for (const s of scales) {
+        if (pct >= Number(s.minPercentage) && pct <= Number(s.maxPercentage)) {
+          return { name: s.name, gradePoint: s.gradePoint };
+        }
+      }
+      return null;
+    }
+
+    const results = await Promise.all(
+      enrolled.map(async (s) => {
+        if (!examIds.length || !allExamSubjects.length) {
+          return { student: s, className: classInfo?.name, marks: [], hasMarks: false, board, academicYear: data.academicYear, term: data.term };
+        }
+        const marksRows = await db.select({
+          examSubjectId: studentMarks.examSubjectId,
+          marks: studentMarks.marks,
+          grade: studentMarks.grade,
+        }).from(studentMarks).where(and(
+          eq(studentMarks.studentId, s.id),
+          inArray(studentMarks.examSubjectId, allExamSubjects.map((es) => es.id)),
+        ));
+
+        const marksMap = new Map(marksRows.map((m) => [m.examSubjectId, m]));
+
+        let totalObtained = 0, totalMax = 0;
+        const marksOut = allExamSubjects.map((es) => {
+          const row = marksMap.get(es.id);
+          const obtained = row?.marks ? Number(row.marks) : null;
+          const max = Number(es.maxMarks);
+          const pct = obtained !== null && max > 0 ? Math.round((obtained / max) * 100) : null;
+          const g = pct !== null ? assignGrade(pct) : null;
+          if (obtained !== null) { totalObtained += obtained; totalMax += max; }
+          return {
+            subjectName: es.subjectName,
+            maxMarks: es.maxMarks,
+            marks: obtained !== null ? String(obtained) : null,
+            percentage: pct !== null ? String(pct) : null,
+            grade: row?.grade || g?.name || null,
+            gradePoint: g?.gradePoint ?? null,
+          };
+        });
+
+        const percentage = totalMax > 0 ? Math.round((totalObtained / totalMax) * 100) : 0;
+        const overallGrade = assignGrade(percentage);
+
+        return {
+          student: s,
+          className: classInfo?.name,
+          marks: marksOut,
+          hasMarks: marksOut.some((m) => m.marks !== null),
+          board,
+          academicYear: data.academicYear,
+          term: data.term,
+          percentage: String(percentage),
+          overallGrade: overallGrade?.name ?? "—",
+          overallGradePoint: overallGrade?.gradePoint ?? null,
+        };
+      })
+    );
+
+    return { students: results };
+  });
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PLATFORM RAZORPAY — school subscription billing
 // ─────────────────────────────────────────────────────────────────────────────
 
