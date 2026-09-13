@@ -603,8 +603,8 @@ function ExamsPage() {
       {activeTab === "reportcard" && (
         <div className="space-y-6">
 
-          {/* ── Full class consolidated report ────────────────────────────── */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          {/* ── Full class consolidated report — admin only ───────────────── */}
+          {isAdmin && <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-1">
               <Users className="w-5 h-5 text-blue-600" />
               <h2 className="text-base font-bold text-slate-800">Full Class Report Cards</h2>
@@ -710,7 +710,7 @@ function ExamsPage() {
                 <ConsolidatedReportCard report={classReportSelected} onClose={() => setClassReportView("list")} />
               </div>
             )}
-          </div>
+          </div>}
 
           {/* ── Single student report ──────────────────────────────────────── */}
           <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
