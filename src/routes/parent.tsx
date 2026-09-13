@@ -1013,9 +1013,9 @@ function ParentPortal() {
                                                     onClick={() => act.photoUrl && setLightbox(act.photoUrl)}
                                                   >
                                                     {act.photoUrl ? (
-                                                      <img src={act.photoUrl} alt={act.title} className="w-full aspect-square object-cover hover:scale-105 transition-transform duration-200" />
+                                                      <img src={act.photoUrl} alt={act.title} className="w-full h-32 object-cover hover:scale-105 transition-transform duration-200" />
                                                     ) : (
-                                                      <div className="w-full aspect-square bg-gradient-to-br from-violet-100 to-blue-100 flex items-center justify-center">
+                                                      <div className="w-full h-32 bg-gradient-to-br from-violet-100 to-blue-100 flex items-center justify-center">
                                                         <Image className="w-8 h-8 text-violet-300" />
                                                       </div>
                                                     )}

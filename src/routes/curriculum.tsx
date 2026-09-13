@@ -450,11 +450,11 @@ function CurriculumPage() {
                                         className={`bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition group ${canManage ? "cursor-pointer" : ""}`}
                                       >
                                         {act.photoUrl ? (
-                                          <div className="relative aspect-square cursor-pointer overflow-hidden bg-slate-100" onClick={(e) => { e.stopPropagation(); setLightbox(act.photoUrl!); }}>
+                                          <div className="relative h-32 cursor-pointer overflow-hidden bg-slate-100" onClick={(e) => { e.stopPropagation(); setLightbox(act.photoUrl!); }}>
                                             <img src={act.photoUrl} alt={act.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                                           </div>
                                         ) : (
-                                          <div className="aspect-square bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+                                          <div className="h-32 bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
                                             <Image className="w-8 h-8 text-blue-200" />
                                           </div>
                                         )}
