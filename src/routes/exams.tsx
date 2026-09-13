@@ -206,10 +206,11 @@ function ExamsPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [marksData, setMarksData] = useState<Record<number, Record<number, { marks: string; grade: string }>>>({});
 
-  // Report card tab (admin)
+  // Report card tab
   const [rcClass, setRcClass]   = useState<number>(0);
   const [rcYear, setRcYear]     = useState("");
   const [rcStudent, setRcStudent] = useState<number | "">("");
+  const [rcStudents, setRcStudents] = useState<Student[]>([]);
   // Consolidated report for single student
   const [singleReport, setSingleReport] = useState<any>(null);
   const [singleLoading, setSingleLoading] = useState(false);
@@ -225,7 +226,7 @@ function ExamsPage() {
     getContextFn().then((ctx: any) => {
       setIsAdmin(ctx.isAdmin);
       setAssignedClassIds(ctx.assignedClassIds ?? []);
-      setActiveTab(ctx.isAdmin ? "exams" : "marks");
+      // Always start on Exams tab — all roles see same UI
       setContextLoaded(true);
     }).catch(() => setContextLoaded(true));
 
@@ -240,6 +241,15 @@ function ExamsPage() {
       getStudentsFn({ data: { classId: selectedClass } }).then((d) => setStudents(d as Student[]));
     }
   }, [selectedClass]);
+
+  // Load students for Report Cards class picker (separate from marks tab)
+  useEffect(() => {
+    if (rcClass) {
+      getStudentsFn({ data: { classId: rcClass } }).then((d) => { setRcStudents(d as Student[]); setRcStudent(""); setSingleReport(null); });
+    } else {
+      setRcStudents([]); setRcStudent("");
+    }
+  }, [rcClass]);
 
   useEffect(() => {
     // Always load exam subjects whenever an exam is selected (needed by both exams and marks tabs)
@@ -695,14 +705,15 @@ function ExamsPage() {
             <h2 className="text-base font-bold text-slate-800 mb-1">Single Student Report Card</h2>
             <p className="text-xs text-slate-400 mb-4">Full consolidated report for one student — all exams in the selected year.</p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-              <select value={rcClass} onChange={(e) => { setRcClass(Number(e.target.value)); setRcStudent(""); setSingleReport(null); }}
+              <select value={rcClass} onChange={(e) => setRcClass(Number(e.target.value))}
                 className={inputCls + " bg-white"}>
                 <option value={0}>— class —</option>
                 {visibleClasses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
-              <select value={rcStudent} onChange={(e) => setRcStudent(e.target.value ? Number(e.target.value) : "")} className={inputCls + " bg-white"}>
-                <option value="">— student —</option>
-                {students.map((s) => <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>)}
+              <select value={rcStudent} onChange={(e) => setRcStudent(e.target.value ? Number(e.target.value) : "")} className={inputCls + " bg-white"}
+                disabled={!rcClass || rcStudents.length === 0}>
+                <option value="">{!rcClass ? "— select class first —" : rcStudents.length === 0 ? "Loading…" : "— student —"}</option>
+                {rcStudents.map((s) => <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>)}
               </select>
               <input value={rcYear} onChange={(e) => setRcYear(e.target.value)} className={inputCls} placeholder="Academic year e.g. 2025-26" />
             </div>
