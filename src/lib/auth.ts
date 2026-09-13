@@ -1088,6 +1088,7 @@ export const getParentPortal = createServerFn({ method: "GET" }).handler(async (
         .where(inArray(students.id, childIds))
     : [];
 
+  const { feeStructures } = await import("@/lib/db/schema");
   const fees = childIds.length
     ? await db
         .select({
@@ -1099,8 +1100,11 @@ export const getParentPortal = createServerFn({ method: "GET" }).handler(async (
           razorpayOrderId: invoices.razorpayOrderId,
           paidAt: invoices.paidAt,
           paidMethod: invoices.paidMethod,
+          feeName: feeStructures.name,
+          feeFrequency: feeStructures.frequency,
         })
         .from(invoices)
+        .leftJoin(feeStructures, eq(invoices.feeStructureId, feeStructures.id))
         .where(and(
           inArray(invoices.studentId, childIds),
           inArray(invoices.status, ["sent", "overdue", "draft", "paid"])
@@ -1152,6 +1156,8 @@ export const getParentPortal = createServerFn({ method: "GET" }).handler(async (
       dueDate: f.dueDate ? fmtDate(f.dueDate) : null,
       paidAt: f.paidAt ? f.paidAt.toISOString() : null,
       paidMethod: f.paidMethod ?? null,
+      feeName: f.feeName ?? null,
+      feeFrequency: f.feeFrequency ?? null,
     })),
   };
 });
@@ -5569,98 +5575,129 @@ export const runFeeAutomation = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await requireAuth(data.schoolId, data.locationId);
     await assertCanOperateForUser();
-    const { db } = await import("@/lib/db");
-    const { invoices, feeStructures, students, classEnrollments } = await import("@/lib/db/schema");
+    return runFeeAutomationCore(data.schoolId, data.locationId);
+  });
 
-    const todayStr = todayIST();
-    const [year, month, day] = todayStr.split("-").map(Number);
+// Core automation logic — also called by the cron endpoint
+export async function runFeeAutomationCore(schoolId: number, locationId: number) {
+  const { db } = await import("@/lib/db");
+  const { invoices, feeStructures, classEnrollments } = await import("@/lib/db/schema");
 
-    // ── 1. Flip sent invoices past due date → overdue ────────────────────────
-    await db.update(invoices)
-      .set({ status: "overdue" })
-      .where(and(
-        eq(invoices.schoolId, data.schoolId),
-        eq(invoices.locationId, data.locationId),
-        eq(invoices.status, "sent"),
-        sql`${invoices.dueDate} < ${todayStr}`,
-      ));
+  const todayStr = todayIST();
+  const [year, month] = todayStr.split("-").map(Number);
 
-    // ── 2. Auto-generate monthly invoices for the current month ───────────────
-    const currentMonth = `${year}-${String(month).padStart(2, "0")}`;
+  // ── 1. Flip sent invoices past due date → overdue ─────────────────────────
+  await db.update(invoices)
+    .set({ status: "overdue" })
+    .where(and(
+      eq(invoices.schoolId, schoolId),
+      eq(invoices.locationId, locationId),
+      eq(invoices.status, "sent"),
+      sql`${invoices.dueDate} < ${todayStr}`,
+    ));
 
-    // Get all monthly fee structures for this school/location
-    const structures = await db.select().from(feeStructures)
-      .where(and(
-        eq(feeStructures.schoolId, data.schoolId),
-        eq(feeStructures.locationId, data.locationId),
-        eq(feeStructures.frequency, "monthly"),
-      ));
+  // ── 2. Get all active fee structures ──────────────────────────────────────
+  const structures = await db.select().from(feeStructures)
+    .where(and(
+      eq(feeStructures.schoolId, schoolId),
+      eq(feeStructures.locationId, locationId),
+    ));
 
-    if (!structures.length) return { ok: true, generated: 0, flipped: 0 };
+  if (!structures.length) return { ok: true, generated: 0 };
 
-    // Get enrolled students
-    const enrollments = await db.select({
-      studentId: classEnrollments.studentId,
-      classId: classEnrollments.classId,
-    }).from(classEnrollments)
-      .where(and(
-        eq(classEnrollments.schoolId, data.schoolId),
-        eq(classEnrollments.locationId, data.locationId),
-        eq(classEnrollments.status, "active"),
-      ));
+  // ── 3. Get enrolled students ───────────────────────────────────────────────
+  const enrollments = await db.select({
+    studentId: classEnrollments.studentId,
+    classId: classEnrollments.classId,
+  }).from(classEnrollments)
+    .where(and(
+      eq(classEnrollments.schoolId, schoolId),
+      eq(classEnrollments.locationId, locationId),
+      eq(classEnrollments.status, "active"),
+    ));
 
-    if (!enrollments.length) return { ok: true, generated: 0, flipped: 0 };
+  if (!enrollments.length) return { ok: true, generated: 0 };
 
-    // Check existing auto-generated invoices for this month to avoid duplicates
-    const existing = await db.select({ feeStructureId: invoices.feeStructureId, studentId: invoices.studentId })
-      .from(invoices)
-      .where(and(
-        eq(invoices.schoolId, data.schoolId),
-        eq(invoices.locationId, data.locationId),
-        eq(invoices.generatedMonth, currentMonth),
-      ));
+  // ── 4. Determine which billing period each fee structure falls in ──────────
+  // generatedMonth key = billing period start month "YYYY-MM"
+  // Monthly    → current month every month
+  // Quarterly  → Jan, Apr, Jul, Oct  (Q1=01, Q2=04, Q3=07, Q4=10)
+  // Annually   → January only
+  // One-time   → only once ever (generatedMonth = "once")
 
-    const existingSet = new Set(existing.map((e) => `${e.feeStructureId}-${e.studentId}`));
+  const quarterStart = [1, 1, 1, 4, 4, 4, 7, 7, 7, 10, 10, 10][month - 1]; // month → Q start month
 
-    const toInsert: {
-      schoolId: number; locationId: number; studentId: number;
-      feeStructureId: number; amount: string; dueDate: Date | null;
-      status: "sent"; generatedMonth: string;
-    }[] = [];
+  function getBillingPeriod(frequency: string): string | null {
+    if (frequency === "monthly")   return `${year}-${String(month).padStart(2, "0")}`;
+    if (frequency === "quarterly") return month === quarterStart ? `${year}-${String(quarterStart).padStart(2, "0")}` : null;
+    if (frequency === "annually")  return month === 1 ? `${year}-01` : null;
+    if (frequency === "one_time")  return "once";
+    return null;
+  }
 
-    for (const fs of structures) {
-      // Match by classId if fee structure is class-specific, else apply to all
-      const applicableEnrollments = fs.classId
-        ? enrollments.filter((e) => e.classId === fs.classId)
-        : enrollments;
+  // ── 5. Check existing invoices for dedup ──────────────────────────────────
+  const existing = await db
+    .select({ feeStructureId: invoices.feeStructureId, studentId: invoices.studentId, generatedMonth: invoices.generatedMonth })
+    .from(invoices)
+    .where(and(
+      eq(invoices.schoolId, schoolId),
+      eq(invoices.locationId, locationId),
+    ));
 
-      for (const en of applicableEnrollments) {
-        const key = `${fs.id}-${en.studentId}`;
-        if (existingSet.has(key)) continue;
+  const existingSet = new Set(existing.map((e) => `${e.feeStructureId}-${e.studentId}-${e.generatedMonth}`));
 
-        // Build due date: dueDay of current month
-        const dueDay = fs.dueDay ?? 1;
-        const dueDate = new Date(Date.UTC(year, month - 1, dueDay));
+  const toInsert: {
+    schoolId: number; locationId: number; studentId: number;
+    feeStructureId: number; amount: string; dueDate: Date | null;
+    status: "sent"; generatedMonth: string;
+  }[] = [];
 
-        toInsert.push({
-          schoolId: data.schoolId,
-          locationId: data.locationId,
-          studentId: en.studentId,
-          feeStructureId: fs.id,
-          amount: fs.amount,
-          dueDate,
-          status: "sent",
-          generatedMonth: currentMonth,
-        });
+  for (const fs of structures) {
+    const billingPeriod = getBillingPeriod(fs.frequency ?? "monthly");
+    if (!billingPeriod) continue; // not a billing month for this frequency
+
+    const applicableEnrollments = fs.classId
+      ? enrollments.filter((e) => e.classId === fs.classId)
+      : enrollments;
+
+    for (const en of applicableEnrollments) {
+      const key = `${fs.id}-${en.studentId}-${billingPeriod}`;
+      if (existingSet.has(key)) continue;
+
+      // Due date: dueDay within the billing month
+      const dueDay = fs.dueDay ?? 1;
+      let dueDate: Date | null = null;
+      if (billingPeriod !== "once") {
+        const [bYear, bMonth] = billingPeriod.split("-").map(Number);
+        dueDate = new Date(Date.UTC(bYear, bMonth - 1, dueDay));
+      }
+
+      toInsert.push({
+        schoolId,
+        locationId,
+        studentId: en.studentId,
+        feeStructureId: fs.id,
+        amount: fs.amount,
+        dueDate,
+        status: "sent",
+        generatedMonth: billingPeriod,
+      });
+    }
+  }
+
+  if (toInsert.length) {
+    // Insert one by one to skip duplicate-key violations gracefully
+    for (const row of toInsert) {
+      try {
+        await db.insert(invoices).values(row);
+      } catch {
+        // ignore unique constraint violations (already exists)
       }
     }
+  }
 
-    if (toInsert.length) {
-      await db.insert(invoices).values(toInsert);
-    }
-
-    return { ok: true, generated: toInsert.length };
-  });
+  return { ok: true, generated: toInsert.length };
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MARK INVOICE PAID (Cash / manual)

@@ -18,6 +18,7 @@ type Fee = {
   id: number; studentId: number; amount: string;
   dueDate: string | null; status: string; razorpayOrderId: string | null;
   paidAt: string | null; paidMethod: string | null;
+  feeName: string | null; feeFrequency: string | null;
 };
 type ParentContact = {
   id: number; studentId: number; name: string; relation: string; phone: string | null; address: string | null;
@@ -528,7 +529,7 @@ function ParentPortal() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                      <th className="px-5 py-3.5">Invoice</th>
+                      <th className="px-5 py-3.5">Fee</th>
                       <th className="px-5 py-3.5">Amount</th>
                       <th className="px-5 py-3.5">Due date</th>
                       <th className="px-5 py-3.5">Status</th>
@@ -538,7 +539,10 @@ function ParentPortal() {
                   <tbody className="divide-y divide-slate-100">
                     {pendingFees.map((fee) => (
                       <tr key={fee.id} className="hover:bg-slate-50 transition">
-                        <td className="px-5 py-4 text-slate-500 font-medium">#{fee.id}</td>
+                        <td className="px-5 py-4">
+                          <p className="font-semibold text-slate-800 text-sm">{fee.feeName ?? `Invoice #${fee.id}`}</p>
+                          {fee.feeFrequency && <p className="text-xs text-slate-400 capitalize mt-0.5">{fee.feeFrequency.replace("_", " ")}</p>}
+                        </td>
                         <td className="px-5 py-4 font-bold text-slate-900">₹{parseFloat(fee.amount).toLocaleString("en-IN")}</td>
                         <td className="px-5 py-4 text-slate-500">
                           {fee.dueDate ?? "—"}
@@ -583,7 +587,7 @@ function ParentPortal() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                      <th className="px-5 py-3.5">Invoice</th>
+                      <th className="px-5 py-3.5">Fee</th>
                       <th className="px-5 py-3.5">Amount</th>
                       <th className="px-5 py-3.5">Paid on</th>
                       <th className="px-5 py-3.5">Method</th>
@@ -593,7 +597,10 @@ function ParentPortal() {
                   <tbody className="divide-y divide-slate-100">
                     {paidFees.map((fee) => (
                       <tr key={fee.id} className="hover:bg-slate-50 transition">
-                        <td className="px-5 py-4 text-slate-500 font-medium">#{fee.id}</td>
+                        <td className="px-5 py-4">
+                          <p className="font-semibold text-slate-800 text-sm">{fee.feeName ?? `Invoice #${fee.id}`}</p>
+                          {fee.feeFrequency && <p className="text-xs text-slate-400 capitalize mt-0.5">{fee.feeFrequency.replace("_", " ")}</p>}
+                        </td>
                         <td className="px-5 py-4 font-bold text-emerald-700">₹{parseFloat(fee.amount).toLocaleString("en-IN")}</td>
                         <td className="px-5 py-4 text-slate-500">
                           {fee.paidAt ? new Date(fee.paidAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}
