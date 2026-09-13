@@ -419,11 +419,15 @@ function AcademicsPage() {
           <div className="mb-6">
             <h2 className="text-base font-bold text-slate-800 mb-3">School Board</h2>
             <div className="flex items-center gap-3">
-              <select value={schoolBoard} onChange={(e) => setSchoolBoardValue(e.target.value)} className={inputCls + " w-48 bg-white"}>
-                <option value="preschool">Preschool (no exams/marks)</option>
-                <option value="CBSE">CBSE</option>
-                <option value="ICSE">ICSE</option>
-              </select>
+              {isAdmin ? (
+                <select value={schoolBoard} onChange={(e) => setSchoolBoardValue(e.target.value)} className={inputCls + " w-48 bg-white"}>
+                  <option value="preschool">Preschool (no exams/marks)</option>
+                  <option value="CBSE">CBSE</option>
+                  <option value="ICSE">ICSE</option>
+                </select>
+              ) : (
+                <span className="px-3 py-1.5 bg-blue-100 text-blue-700 text-sm font-bold rounded-lg uppercase tracking-wide">{schoolBoard}</span>
+              )}
               {isAdmin && (
                 <button onClick={async () => {
                   if (!tenant) return;
