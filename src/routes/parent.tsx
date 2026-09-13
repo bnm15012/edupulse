@@ -1,7 +1,7 @@
 import { createFileRoute, useSearch, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { getParentPortal, updateChildPersonal, updateParentContact, getCurriculumActivities, createRazorpayOrder, verifyRazorpayPayment, getStudentAttendanceSummary, listReportCards, listSchoolAnnouncements } from "@/lib/auth";
+import { getParentPortal, updateChildPersonal, updateParentContact, getCurriculumActivities, createRazorpayOrder, verifyRazorpayPayment, getStudentAttendanceSummary, listReportCards, listSchoolAnnouncements, getStudentAcademicReport } from "@/lib/auth";
 import { Users, DollarSign, AlertCircle, CheckCircle2, Clock, CreditCard, BookOpen, Calendar, X, Image, Loader2, BarChart2, GraduationCap, ExternalLink, Megaphone, HeartPulse, ChevronDown } from "lucide-react";
 import { fmtDate, fmtDateTime } from "@/lib/utils";
 
@@ -91,8 +91,9 @@ function ParentPortal() {
   const getActivitiesFn     = useServerFn(getCurriculumActivities);
   const createOrderFn       = useServerFn(createRazorpayOrder);
   const verifyFn            = useServerFn(verifyRazorpayPayment);
-  const getAttendanceFn     = useServerFn(getStudentAttendanceSummary);
-  const listReportCardsFn   = useServerFn(listReportCards);
+  const getAttendanceFn        = useServerFn(getStudentAttendanceSummary);
+  const listReportCardsFn      = useServerFn(listReportCards);
+  const getAcademicReportFn    = useServerFn(getStudentAcademicReport);
 
   const listAnnouncementsFn = useServerFn(listSchoolAnnouncements);
 
@@ -127,6 +128,7 @@ function ParentPortal() {
     return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]));
   }, [attendanceSummary]);
   const [reportCardsList, setReportCardsList] = useState<any[]>([]);
+  const [academicReport, setAcademicReport] = useState<any | null>(null);
 
   const [announcementsList, setAnnouncementsList] = useState<any[]>([]);
   const [academicLoading, setAcademicLoading] = useState(false);
@@ -250,13 +252,25 @@ function ParentPortal() {
   // Load academic data whenever active child changes
   useEffect(() => {
     if (!data?.children[activeChild]?.id) return;
-    const childId = data.children[activeChild].id;
+    const child = data.children[activeChild];
+    const childId = child.id;
     setAcademicLoading(true);
-    setAttendanceSummary([]); setReportCardsList([]); setAnnouncementsList([]);
+    setAttendanceSummary([]); setReportCardsList([]); setAnnouncementsList([]); setAcademicReport(null);
+
+    // Derive current academic year: Indian school year Apr–Mar
+    const now = new Date();
+    const yr = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+    const currentAcademicYear = `${yr}-${String(yr + 1).slice(2)}`;
+
     Promise.all([
       getAttendanceFn({ data: { studentId: childId } }).then((d) => setAttendanceSummary(d as any[])).catch(() => {}),
       listReportCardsFn({ data: { studentId: childId } }).then((d) => setReportCardsList(d as any[])).catch(() => {}),
       listAnnouncementsFn({ data: { target: "parents" } }).then((d) => setAnnouncementsList(d as any[])).catch(() => {}),
+      // Load academic marks if child has a current class
+      child.currentClassId
+        ? getAcademicReportFn({ data: { studentId: childId, classId: child.currentClassId, academicYear: currentAcademicYear } })
+            .then((d) => setAcademicReport(d)).catch(() => {})
+        : Promise.resolve(),
     ]).finally(() => setAcademicLoading(false));
   }, [activeChild, data?.children.length]);
 
@@ -718,69 +732,146 @@ function ParentPortal() {
           </>)}
 
           {activeTab === "academics" && (<>
-          {/* Academic Profile */}
+
+          {/* Marks & Results — inline per exam */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="flex items-center gap-2 px-6 py-4 border-b border-slate-100">
               <div className="w-1 h-5 bg-blue-600 rounded-full" />
               <BarChart2 className="w-4 h-4 text-blue-600" />
-              <h2 className="text-sm font-bold text-slate-800">Academic Profile</h2>
+              <h2 className="text-sm font-bold text-slate-800">Marks & Results</h2>
+              {academicReport && (
+                <span className="ml-auto text-xs text-slate-400">{academicReport.academicYear} · {academicReport.className}</span>
+              )}
             </div>
             {academicLoading ? (
-              <div className="p-6 space-y-3">{[1,2].map(i=><div key={i} className="h-20 bg-slate-100 rounded-xl animate-pulse"/>)}</div>
+              <div className="p-6 space-y-3">{[1,2,3].map(i=><div key={i} className="h-24 bg-slate-100 rounded-xl animate-pulse"/>)}</div>
+            ) : !academicReport || academicReport.exams.length === 0 ? (
+              <div className="p-8 text-center">
+                <GraduationCap className="w-8 h-8 mx-auto mb-2 text-slate-200" />
+                <p className="text-sm text-slate-400">No exam results available yet for the current academic year.</p>
+              </div>
             ) : (
-              <div className="p-6 space-y-6">
-                {/* Report Cards */}
-                <div className="border-t border-slate-100 pt-5">
-                  <div className="flex items-center gap-2 mb-3">
-                    <GraduationCap className="w-4 h-4 text-violet-500" />
-                    <h3 className="text-sm font-bold text-slate-700">Report Cards</h3>
-                  </div>
-                  {reportCardsList.length === 0 ? (
-                    <p className="text-xs text-slate-400 py-4 text-center">No report cards uploaded yet</p>
-                  ) : (() => {
-                    // Group by academic year descending
-                    const byYear = new Map<string, any[]>();
-                    for (const rc of reportCardsList) {
-                      const yr = rc.academicYear ?? "Unknown";
-                      if (!byYear.has(yr)) byYear.set(yr, []);
-                      byYear.get(yr)!.push(rc);
-                    }
-                    const years = [...byYear.keys()].sort((a, b) => b.localeCompare(a));
-                    return (
-                      <div className="space-y-4">
-                        {years.map((year) => (
-                          <div key={year}>
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className="text-xs font-bold text-violet-700 bg-violet-100 px-2.5 py-0.5 rounded-full">{year}</span>
-                            </div>
-                            <div className="space-y-2 border-l-2 border-violet-100 ml-2 pl-1">
-                              {byYear.get(year)!.map((rc: any) => (
-                                <div key={rc.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200 ml-2">
-                                  <div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center shrink-0">
-                                    <GraduationCap className="w-4 h-4 text-violet-600" />
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-semibold text-slate-800">{rc.term}</p>
-                                    {rc.className && <p className="text-xs text-slate-400">{rc.className}</p>}
-                                  </div>
-                                  {rc.publicUrl && (
-                                    <a href={rc.publicUrl} target="_blank" rel="noopener noreferrer"
-                                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold transition shrink-0">
-                                      <ExternalLink className="w-3 h-3" /> Download
-                                    </a>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
+              <div className="p-6 space-y-5">
+                {academicReport.exams.map((exam: any) => (
+                  <div key={exam.examId} className="rounded-xl border border-slate-200 overflow-hidden">
+                    {/* Exam header */}
+                    <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-b border-slate-200">
+                      <div>
+                        <p className="text-sm font-bold text-slate-800">{exam.term}</p>
+                        <p className="text-xs text-slate-400 capitalize">{exam.examType}{exam.startDate ? ` · ${fmtDate(exam.startDate)}` : ""}</p>
                       </div>
-                    );
-                  })()}
-                </div>
+                      {exam.hasMarks && (
+                        <div className="text-right">
+                          <p className="text-sm font-bold text-blue-700">{exam.termPercentage}%</p>
+                          <p className="text-xs text-slate-500">Grade: <span className="font-bold">{exam.termGrade ?? "—"}</span></p>
+                        </div>
+                      )}
+                      {!exam.hasMarks && (
+                        <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">Results awaited</span>
+                      )}
+                    </div>
+                    {/* Subject rows */}
+                    {exam.subjects.length > 0 && (
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-slate-100">
+                            <th className="text-left px-4 py-2 text-slate-500 font-semibold">Subject</th>
+                            <th className="px-3 py-2 text-slate-500 font-semibold text-center">Max</th>
+                            <th className="px-3 py-2 text-slate-500 font-semibold text-center">Scored</th>
+                            <th className="px-3 py-2 text-slate-500 font-semibold text-center">%</th>
+                            <th className="px-3 py-2 text-slate-500 font-semibold text-center">Grade</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                          {exam.subjects.map((s: any, i: number) => (
+                            <tr key={i} className="hover:bg-slate-50 transition">
+                              <td className="px-4 py-2 font-medium text-slate-700">{s.subjectName}</td>
+                              <td className="px-3 py-2 text-center text-slate-500">{s.maxMarks}</td>
+                              <td className="px-3 py-2 text-center font-semibold text-slate-800">{s.marks ?? "—"}</td>
+                              <td className="px-3 py-2 text-center text-slate-600">{s.percentage ? `${s.percentage}%` : "—"}</td>
+                              <td className="px-3 py-2 text-center">
+                                {s.grade ? (
+                                  <span className="font-bold text-blue-700">{s.grade}</span>
+                                ) : <span className="text-slate-300">—</span>}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                ))}
+
+                {/* Overall summary */}
+                {academicReport.overallPercentage && (
+                  <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-5 py-3">
+                    <p className="text-sm font-bold text-blue-800">Overall ({academicReport.academicYear})</p>
+                    <div className="text-right">
+                      <p className="text-lg font-extrabold text-blue-700">{academicReport.overallPercentage}%</p>
+                      <p className="text-xs text-blue-600">Grade: <span className="font-bold">{academicReport.overallGrade ?? "—"}</span></p>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
+
+          {/* Report Card PDFs (uploaded by admin) */}
+          {(reportCardsList.length > 0 || !academicLoading) && (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="flex items-center gap-2 px-6 py-4 border-b border-slate-100">
+              <div className="w-1 h-5 bg-violet-600 rounded-full" />
+              <GraduationCap className="w-4 h-4 text-violet-600" />
+              <h2 className="text-sm font-bold text-slate-800">Report Card PDFs</h2>
+            </div>
+            {academicLoading ? (
+              <div className="p-6 space-y-2">{[1,2].map(i=><div key={i} className="h-14 bg-slate-100 rounded-xl animate-pulse"/>)}</div>
+            ) : reportCardsList.length === 0 ? (
+              <div className="p-6 text-center">
+                <p className="text-xs text-slate-400">No report card PDFs uploaded yet by the school.</p>
+              </div>
+            ) : (() => {
+              // Group by academic year descending
+              const byYearMap = new Map<string, any[]>();
+              for (const rc of reportCardsList) {
+                const yr = rc.academicYear ?? "Unknown";
+                if (!byYearMap.has(yr)) byYearMap.set(yr, []);
+                byYearMap.get(yr)!.push(rc);
+              }
+              const years = [...byYearMap.keys()].sort((a, b) => b.localeCompare(a));
+              return (
+                <div className="p-6 space-y-4">
+                  {years.map((year) => (
+                    <div key={year}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xs font-bold text-violet-700 bg-violet-100 px-2.5 py-0.5 rounded-full">{year}</span>
+                      </div>
+                      <div className="space-y-2 border-l-2 border-violet-100 ml-2 pl-3">
+                        {byYearMap.get(year)!.map((rc: any) => (
+                          <div key={rc.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                            <div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center shrink-0">
+                              <GraduationCap className="w-4 h-4 text-violet-600" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-slate-800">{rc.term ?? "Report Card"}</p>
+                              {rc.className && <p className="text-xs text-slate-400">{rc.className}</p>}
+                            </div>
+                            {rc.publicUrl && (
+                              <a href={rc.publicUrl} target="_blank" rel="noopener noreferrer"
+                                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold transition shrink-0">
+                                <ExternalLink className="w-3 h-3" /> Download
+                              </a>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+          )}
 
           </>)}
 

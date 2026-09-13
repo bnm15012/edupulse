@@ -7097,6 +7097,150 @@ export const getReportCardData = createServerFn({ method: "GET" })
   });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// CONSOLIDATED ACADEMIC REPORT (all exams in a class+year for one student)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const studentAcademicReportSchema = z.object({
+  studentId: z.number(),
+  classId: z.number(),
+  academicYear: z.string(),
+});
+
+export const getStudentAcademicReport = createServerFn({ method: "GET" })
+  .validator((i: unknown) => studentAcademicReportSchema.parse(i))
+  .handler(async ({ data }) => {
+    await requireSession();
+    const { db } = await import("@/lib/db");
+    const { students, studentMarks, examSubjects, exams, subjects, classes, schools, gradingScales } = await import("@/lib/db/schema");
+
+    const [student] = await db.select({
+      id: students.id, firstName: students.firstName, lastName: students.lastName,
+      dateOfBirth: students.dateOfBirth, gender: students.gender, schoolId: students.schoolId,
+    }).from(students).where(eq(students.id, data.studentId)).limit(1);
+    if (!student) throw new Error("Student not found");
+
+    const [school] = await db.select({ board: schools.board, name: schools.name }).from(schools).where(eq(schools.id, student.schoolId)).limit(1);
+    const board = school?.board ?? "generic";
+
+    const [classInfo] = await db.select({ name: classes.name, ageGroup: classes.ageGroup }).from(classes).where(eq(classes.id, data.classId)).limit(1);
+
+    const scales = await db.select({
+      name: gradingScales.name, minPercentage: gradingScales.minPercentage,
+      maxPercentage: gradingScales.maxPercentage, gradePoint: gradingScales.gradePoint,
+    }).from(gradingScales).where(and(eq(gradingScales.schoolId, student.schoolId), eq(gradingScales.board, board)));
+
+    // All exams for this class+year, sorted by term
+    const allExams = await db.select({
+      id: exams.id, term: exams.term, examType: exams.examType,
+      startDate: exams.startDate, endDate: exams.endDate,
+    }).from(exams).where(and(
+      eq(exams.schoolId, student.schoolId),
+      eq(exams.classId, data.classId),
+      eq(exams.academicYear, data.academicYear),
+    )).orderBy(asc(exams.startDate));
+
+    function assignGrade(pct: number) {
+      for (const s of scales) {
+        if (pct >= Number(s.minPercentage) && pct <= Number(s.maxPercentage))
+          return { name: s.name, gradePoint: s.gradePoint };
+      }
+      return { name: "—", gradePoint: null };
+    }
+
+    let grandMax = 0, grandGot = 0;
+
+    const examSections = await Promise.all(allExams.map(async (exam) => {
+      const esRows = await db.select({
+        id: examSubjects.id, subjectName: subjects.name, maxMarks: examSubjects.maxMarks,
+      }).from(examSubjects)
+        .innerJoin(subjects, eq(examSubjects.subjectId, subjects.id))
+        .where(eq(examSubjects.examId, exam.id))
+        .orderBy(asc(subjects.name));
+
+      const marksRows = esRows.length
+        ? await db.select({ examSubjectId: studentMarks.examSubjectId, marks: studentMarks.marks })
+          .from(studentMarks)
+          .where(and(eq(studentMarks.studentId, data.studentId), inArray(studentMarks.examSubjectId, esRows.map(e => e.id))))
+        : [];
+
+      const marksMap = new Map(marksRows.map(m => [m.examSubjectId, m.marks]));
+
+      let termMax = 0, termGot = 0;
+      const subjectMarks = esRows.map(es => {
+        const max = Number(es.maxMarks) || 0;
+        const marksVal = marksMap.get(es.id);
+        const got = marksVal !== null && marksVal !== undefined ? Number(marksVal) : null;
+        const pct = got !== null && max > 0 ? Math.round((got / max) * 100) : null;
+        const grade = pct !== null ? assignGrade(pct) : null;
+        if (got !== null) { termMax += max; termGot += got; }
+        return {
+          subjectName: es.subjectName, maxMarks: es.maxMarks,
+          marks: got !== null ? String(got) : null,
+          percentage: pct !== null ? String(pct) : null,
+          grade: grade?.name ?? null, gradePoint: grade?.gradePoint ?? null,
+        };
+      });
+
+      grandMax += termMax; grandGot += termGot;
+      const termPct = termMax > 0 ? Math.round((termGot / termMax) * 100) : null;
+      const termGrade = termPct !== null ? assignGrade(termPct) : null;
+      const hasMarks = subjectMarks.some(s => s.marks !== null);
+
+      return {
+        examId: exam.id, term: exam.term, examType: exam.examType,
+        startDate: exam.startDate, endDate: exam.endDate,
+        subjects: subjectMarks, hasMarks,
+        termPercentage: termPct !== null ? String(termPct) : null,
+        termGrade: termGrade?.name ?? null, termGradePoint: termGrade?.gradePoint ?? null,
+      };
+    }));
+
+    const overallPct = grandMax > 0 ? Math.round((grandGot / grandMax) * 100) : null;
+    const overallGrade = overallPct !== null ? assignGrade(overallPct) : null;
+
+    return {
+      student, board, schoolName: school?.name ?? null,
+      className: classInfo?.name ?? null, ageGroup: classInfo?.ageGroup ?? null,
+      academicYear: data.academicYear,
+      exams: examSections,
+      overallPercentage: overallPct !== null ? String(overallPct) : null,
+      overallGrade: overallGrade?.name ?? null, overallGradePoint: overallGrade?.gradePoint ?? null,
+    };
+  });
+
+// Same but for all students in the class (admin bulk)
+const consolidatedClassReportSchema = z.object({
+  classId: z.number(),
+  academicYear: z.string(),
+});
+
+export const getConsolidatedClassReport = createServerFn({ method: "GET" })
+  .validator((i: unknown) => consolidatedClassReportSchema.parse(i))
+  .handler(async ({ data }) => {
+    await requireSession();
+    const { db } = await import("@/lib/db");
+    const { students, classEnrollments } = await import("@/lib/db/schema");
+
+    const enrolled = await db.select({ id: students.id, firstName: students.firstName, lastName: students.lastName })
+      .from(students)
+      .innerJoin(classEnrollments, eq(classEnrollments.studentId, students.id))
+      .where(and(eq(classEnrollments.classId, data.classId), eq(classEnrollments.status, "active")))
+      .orderBy(asc(students.firstName));
+
+    const results = await Promise.all(enrolled.map(async (s) => {
+      try {
+        // Re-use the handler logic directly
+        const r = await getStudentAcademicReport({ data: { studentId: s.id, classId: data.classId, academicYear: data.academicYear } });
+        return r;
+      } catch {
+        return { student: s, exams: [], overallPercentage: null, overallGrade: null, error: true };
+      }
+    }));
+
+    return { students: results };
+  });
+
+// ─────────────────────────────────────────────────────────────────────────────
 // EXAMS PAGE CONTEXT — returns role + teacher's assigned classIds
 // ─────────────────────────────────────────────────────────────────────────────
 

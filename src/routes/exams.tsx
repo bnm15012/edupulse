@@ -9,8 +9,9 @@ import {
   manageExam, listExams, deleteExam,
   upsertExamSubject, listExamSubjects, deleteExamSubject,
   getStudentsForMarks, listStudentMarks, saveStudentMarks,
-  listClasses, listSubjects, getReportCardData, getBulkReportCardData,
+  listClasses, listSubjects,
   getSchoolBoard, getExamsPageContext,
+  getStudentAcademicReport, getConsolidatedClassReport,
 } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { useToast } from "@/lib/toast";
@@ -28,60 +29,101 @@ type Student = { id: number; firstName: string; lastName: string };
 
 const inputCls = "w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm transition";
 
-// ─── Single report card printer ───────────────────────────────────────────────
-function ReportCardView({ rcData, onClose }: { rcData: any; onClose?: () => void }) {
+// ─── Consolidated report card — one student, all exams for the year ──────────
+function ConsolidatedReportCard({ report, onClose }: { report: any; onClose?: () => void }) {
+  if (!report) return null;
   return (
-    <div className="border border-slate-200 rounded-2xl p-8 bg-white">
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-center flex-1">
-          <div className="flex items-center justify-center gap-2 mb-1">
-            <h2 className="text-2xl font-bold text-slate-900">Report Card</h2>
-            <span className="px-2.5 py-0.5 text-xs font-bold uppercase rounded-full bg-blue-100 text-blue-700">{rcData.board}</span>
+    <div className="border border-slate-200 rounded-2xl bg-white overflow-hidden print:border-0">
+      {/* Header */}
+      <div className="flex items-start justify-between px-8 pt-8 pb-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <h2 className="text-xl font-extrabold text-slate-900">Academic Report Card</h2>
+            <span className="px-2 py-0.5 text-xs font-bold uppercase rounded-full bg-blue-100 text-blue-700">{report.board}</span>
           </div>
-          <p className="text-sm text-slate-500">{rcData.academicYear} · {rcData.term}</p>
+          <p className="text-sm text-slate-500">{report.schoolName} · {report.academicYear}</p>
         </div>
         {onClose && (
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 ml-2"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 print:hidden"><X className="w-4 h-4" /></button>
         )}
       </div>
-      <div className="mb-4">
-        <p className="text-sm"><strong>Student:</strong> {rcData.student.firstName} {rcData.student.lastName}</p>
-        <p className="text-sm"><strong>Class:</strong> {rcData.className}</p>
+
+      {/* Student info */}
+      <div className="mx-8 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+        <div><p className="text-xs text-slate-400">Student</p><p className="font-bold text-slate-800">{report.student.firstName} {report.student.lastName}</p></div>
+        <div><p className="text-xs text-slate-400">Class</p><p className="font-semibold text-slate-700">{report.className}</p></div>
+        <div><p className="text-xs text-slate-400">Academic Year</p><p className="font-semibold text-slate-700">{report.academicYear}</p></div>
+        <div><p className="text-xs text-slate-400">Board</p><p className="font-semibold text-slate-700">{report.board?.toUpperCase()}</p></div>
       </div>
-      <table className="w-full text-sm border border-slate-200 rounded-xl overflow-hidden mb-4">
-        <thead className="bg-slate-50">
-          <tr>
-            <th className="text-left px-4 py-2">Subject</th>
-            <th className="px-4 py-2">Max</th>
-            <th className="px-4 py-2">Obtained</th>
-            <th className="px-4 py-2">%</th>
-            <th className="px-4 py-2">Grade</th>
-            <th className="px-4 py-2">GP</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {rcData.marks.map((m: any, i: number) => (
-            <tr key={i}>
-              <td className="px-4 py-2">{m.subjectName}</td>
-              <td className="px-4 py-2 text-center">{m.maxMarks}</td>
-              <td className="px-4 py-2 text-center">{m.marks ?? "—"}</td>
-              <td className="px-4 py-2 text-center">{m.percentage ?? "—"}</td>
-              <td className="px-4 py-2 text-center font-bold text-blue-700">{m.grade ?? "—"}</td>
-              <td className="px-4 py-2 text-center">{m.gradePoint ?? "—"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <div className="flex items-center justify-between bg-slate-50 rounded-xl p-4 mb-4">
-        <div>
-          <p className="text-sm font-bold">Percentage: {rcData.percentage}%</p>
-          <p className="text-sm font-bold text-blue-700">Overall Grade: {rcData.overallGrade} {rcData.overallGradePoint ? `(${rcData.overallGradePoint} GP)` : ""}</p>
+
+      {/* One section per exam */}
+      <div className="px-8 space-y-5 pb-4">
+        {report.exams.map((exam: any) => (
+          <div key={exam.examId} className="rounded-xl border border-slate-200 overflow-hidden">
+            {/* Exam header */}
+            <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-b border-slate-200">
+              <div>
+                <p className="text-sm font-bold text-slate-800">{exam.term}</p>
+                <p className="text-xs text-slate-400 capitalize">{exam.examType}{exam.startDate ? ` · ${fmtDate(exam.startDate)}` : ""}</p>
+              </div>
+              {exam.hasMarks ? (
+                <div className="text-right">
+                  <p className="text-sm font-bold text-blue-700">{exam.termPercentage}%</p>
+                  <p className="text-xs text-slate-500">Grade: <span className="font-bold">{exam.termGrade ?? "—"}</span>{exam.termGradePoint ? ` · ${exam.termGradePoint} GP` : ""}</p>
+                </div>
+              ) : (
+                <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">Results awaited</span>
+              )}
+            </div>
+            {/* Subject rows */}
+            <table className="w-full text-sm">
+              <thead className="bg-white border-b border-slate-100">
+                <tr>
+                  <th className="text-left px-4 py-2 text-xs font-semibold text-slate-500">Subject</th>
+                  <th className="px-3 py-2 text-xs font-semibold text-slate-500 text-center">Max</th>
+                  <th className="px-3 py-2 text-xs font-semibold text-slate-500 text-center">Scored</th>
+                  <th className="px-3 py-2 text-xs font-semibold text-slate-500 text-center">%</th>
+                  <th className="px-3 py-2 text-xs font-semibold text-slate-500 text-center">Grade</th>
+                  <th className="px-3 py-2 text-xs font-semibold text-slate-500 text-center">GP</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {exam.subjects.map((s: any, i: number) => (
+                  <tr key={i} className="hover:bg-slate-50 transition">
+                    <td className="px-4 py-2 font-medium text-slate-700">{s.subjectName}</td>
+                    <td className="px-3 py-2 text-center text-slate-500">{s.maxMarks}</td>
+                    <td className="px-3 py-2 text-center font-semibold text-slate-800">{s.marks ?? "—"}</td>
+                    <td className="px-3 py-2 text-center text-slate-600">{s.percentage ? `${s.percentage}%` : "—"}</td>
+                    <td className="px-3 py-2 text-center font-bold text-blue-700">{s.grade ?? "—"}</td>
+                    <td className="px-3 py-2 text-center text-slate-500">{s.gradePoint ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+      </div>
+
+      {/* Overall summary */}
+      {report.overallPercentage && (
+        <div className="mx-8 mb-8 flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-6 py-4">
+          <div>
+            <p className="text-sm font-bold text-blue-800">Overall Result — {report.academicYear}</p>
+            <p className="text-xs text-blue-600">{report.className} · {report.board}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-2xl font-extrabold text-blue-700">{report.overallPercentage}%</p>
+            <p className="text-xs text-blue-600 font-semibold">Grade: {report.overallGrade ?? "—"}{report.overallGradePoint ? ` (${report.overallGradePoint} GP)` : ""}</p>
+          </div>
         </div>
-        <button onClick={() => window.print()} className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg">
-          <Printer className="w-3.5 h-3.5" /> Print
+      )}
+
+      {/* Print button */}
+      <div className="px-8 pb-8 print:hidden">
+        <button onClick={() => window.print()} className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg">
+          <Printer className="w-4 h-4" /> Print / Save as PDF
         </button>
       </div>
-      <p className="text-xs text-slate-400 text-center">Board: {rcData.board} grading scale applied automatically</p>
     </div>
   );
 }
@@ -114,8 +156,8 @@ function ExamsPage() {
   const getStudentsFn         = useServerFn(getStudentsForMarks);
   const listStudentMarksFn    = useServerFn(listStudentMarks);
   const saveStudentMarksFn    = useServerFn(saveStudentMarks);
-  const getReportCardDataFn   = useServerFn(getReportCardData);
-  const getBulkRCFn           = useServerFn(getBulkReportCardData);
+  const getStudentReportFn    = useServerFn(getStudentAcademicReport);
+  const getClassReportFn      = useServerFn(getConsolidatedClassReport);
   const getSchoolBoardFn      = useServerFn(getSchoolBoard);
   const getContextFn          = useServerFn(getExamsPageContext);
 
@@ -131,21 +173,18 @@ function ExamsPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [marksData, setMarksData] = useState<Record<number, Record<number, { marks: string; grade: string }>>>({});
 
-  // Report card tab (admin — single student)
+  // Report card tab (admin)
+  const [rcClass, setRcClass]   = useState<number>(0);
+  const [rcYear, setRcYear]     = useState("");
   const [rcStudent, setRcStudent] = useState<number | "">("");
-  const [rcYear, setRcYear] = useState("");
-  const [rcTerm, setRcTerm] = useState("");
-  const [rcData, setRcData] = useState<any>(null);
-
-  // Bulk report card (admin)
-  const [bulkClass, setBulkClass] = useState<number>(0);
-  const [bulkYear, setBulkYear] = useState("");
-  const [bulkTerm, setBulkTerm] = useState("");
-  const [bulkData, setBulkData] = useState<any[] | null>(null);
-  const [bulkLoading, setBulkLoading] = useState(false);
-  const [bulkView, setBulkView] = useState<"list" | "single">("list");
-  const [bulkSelected, setBulkSelected] = useState<any>(null);
-  const printRef = useRef<HTMLDivElement>(null);
+  // Consolidated report for single student
+  const [singleReport, setSingleReport] = useState<any>(null);
+  const [singleLoading, setSingleLoading] = useState(false);
+  // Consolidated class report (all students)
+  const [classReport, setClassReport] = useState<any[] | null>(null);
+  const [classReportLoading, setClassReportLoading] = useState(false);
+  const [classReportView, setClassReportView] = useState<"list" | "single">("list");
+  const [classReportSelected, setClassReportSelected] = useState<any>(null);
 
   // Load context + data
   useEffect(() => {
@@ -519,91 +558,106 @@ function ExamsPage() {
       {activeTab === "reportcard" && isAdmin && (
         <div className="space-y-6">
 
-          {/* ── Bulk generation ─────────────────────────────────────────────── */}
+          {/* ── Full class consolidated report ────────────────────────────── */}
           <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-            <div className="flex items-center gap-2 mb-4">
+            <div className="flex items-center gap-2 mb-1">
               <Users className="w-5 h-5 text-blue-600" />
-              <h2 className="text-base font-bold text-slate-800">Generate Report Cards — Full Class</h2>
-              <span className="ml-auto text-xs text-slate-400">1-click for all students in a class</span>
+              <h2 className="text-base font-bold text-slate-800">Full Class Report Cards</h2>
             </div>
+            <p className="text-xs text-slate-400 mb-4">
+              Generates one consolidated report card per student — all exams/terms in the selected academic year as sections.
+            </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-4">
-              <select value={bulkClass} onChange={(e) => setBulkClass(Number(e.target.value))} className={inputCls + " bg-white"}>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+              <select value={rcClass} onChange={(e) => { setRcClass(Number(e.target.value)); setClassReport(null); setClassReportView("list"); }}
+                className={inputCls + " bg-white"}>
                 <option value={0}>— class —</option>
                 {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
-              <input value={bulkYear} onChange={(e) => setBulkYear(e.target.value)} className={inputCls} placeholder="Academic year e.g. 2025-26" />
-              <input value={bulkTerm} onChange={(e) => setBulkTerm(e.target.value)} className={inputCls} placeholder="Term e.g. Term 1" />
+              <input value={rcYear} onChange={(e) => setRcYear(e.target.value)} className={inputCls} placeholder="Academic year e.g. 2025-26" />
               <button
-                disabled={!bulkClass || !bulkYear || !bulkTerm || bulkLoading}
+                disabled={!rcClass || !rcYear || classReportLoading}
                 onClick={async () => {
-                  setBulkLoading(true); setBulkData(null); setBulkView("list");
+                  setClassReportLoading(true); setClassReport(null); setClassReportView("list");
                   try {
-                    const d = await getBulkRCFn({ data: { classId: bulkClass, academicYear: bulkYear, term: bulkTerm } }) as any;
-                    setBulkData(d.students ?? []);
-                    if (!d.students?.length) toast("No enrolled students found in this class", "error");
+                    const d = await getClassReportFn({ data: { classId: rcClass, academicYear: rcYear } }) as any;
+                    const list = d.students ?? [];
+                    setClassReport(list);
+                    if (!list.length) toast("No enrolled students found in this class", "error");
+                    else toast(`${list.length} report cards generated`, "success");
                   } catch (err: any) {
                     toast(err?.message ?? "Failed to generate report cards", "error");
-                  } finally { setBulkLoading(false); }
+                  } finally { setClassReportLoading(false); }
                 }}
                 className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm font-semibold rounded-lg transition"
               >
-                {bulkLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                {bulkLoading ? "Generating…" : "Generate all"}
+                {classReportLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                {classReportLoading ? "Generating…" : "Generate all"}
               </button>
             </div>
 
-            {/* Bulk results list */}
-            {bulkData && bulkData.length > 0 && bulkView === "list" && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm font-semibold text-slate-700">{bulkData.length} report cards generated for <strong>{classes.find(c => c.id === bulkClass)?.name}</strong> · {bulkTerm} {bulkYear}</p>
-                  <button onClick={() => window.print()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700">
+            {/* Class report — student list */}
+            {classReport && classReport.length > 0 && classReportView === "list" && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm font-semibold text-slate-700">
+                    {classReport.length} students · <strong>{classes.find(c => c.id === rcClass)?.name}</strong> · {rcYear}
+                  </p>
+                  <button onClick={() => window.print()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 print:hidden">
                     <Printer className="w-3.5 h-3.5" /> Print all
                   </button>
                 </div>
                 <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
-                  {bulkData.map((rc: any, i: number) => (
-                    <div key={i} className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition">
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs text-slate-400 w-6">{i + 1}</span>
-                        <div>
-                          <p className="text-sm font-semibold text-slate-800">{rc.student?.firstName} {rc.student?.lastName}</p>
-                          {rc.hasMarks ? (
-                            <p className="text-xs text-slate-500">{rc.percentage}% · Grade: <span className="font-bold text-blue-700">{rc.overallGrade}</span></p>
-                          ) : (
-                            <p className="text-xs text-amber-600">No marks entered yet</p>
-                          )}
+                  {classReport.map((rc: any, i: number) => {
+                    const hasAnyMarks = rc.exams?.some((e: any) => e.hasMarks);
+                    return (
+                      <div key={i} className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition">
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs text-slate-400 w-6 shrink-0">{i + 1}</span>
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800">{rc.student?.firstName} {rc.student?.lastName}</p>
+                            {hasAnyMarks ? (
+                              <p className="text-xs text-slate-500">
+                                Overall: <span className="font-bold text-blue-700">{rc.overallPercentage ?? "—"}%</span>
+                                {rc.overallGrade ? <span> · Grade <span className="font-bold">{rc.overallGrade}</span></span> : null}
+                                <span className="text-slate-400"> · {rc.exams?.filter((e: any) => e.hasMarks).length}/{rc.exams?.length} exams completed</span>
+                              </p>
+                            ) : (
+                              <p className="text-xs text-amber-600">No marks entered yet</p>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                      {rc.hasMarks && (
                         <button
-                          onClick={() => { setBulkSelected(rc); setBulkView("single"); }}
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-50 rounded-lg border border-blue-200 transition"
+                          onClick={() => { setClassReportSelected(rc); setClassReportView("single"); }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-50 rounded-lg border border-blue-200 transition shrink-0"
                         >
                           <FileText className="w-3.5 h-3.5" /> View
                         </button>
-                      )}
-                    </div>
-                  ))}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
 
-            {/* Single student detail view */}
-            {bulkView === "single" && bulkSelected && (
+            {/* Single student consolidated view */}
+            {classReportView === "single" && classReportSelected && (
               <div className="mt-4">
-                <button onClick={() => setBulkView("list")} className="mb-4 text-xs text-blue-600 hover:underline flex items-center gap-1">← Back to list</button>
-                <ReportCardView rcData={bulkSelected} />
+                <button onClick={() => setClassReportView("list")} className="mb-4 text-xs text-blue-600 hover:underline flex items-center gap-1 print:hidden">
+                  ← Back to class list
+                </button>
+                <ConsolidatedReportCard report={classReportSelected} onClose={() => setClassReportView("list")} />
               </div>
             )}
           </div>
 
-          {/* ── Single student generation ──────────────────────────────────── */}
+          {/* ── Single student report ──────────────────────────────────────── */}
           <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-            <h2 className="text-base font-bold text-slate-800 mb-4">Generate — Single Student</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-6">
-              <select value={selectedClass} onChange={(e) => { setSelectedClass(Number(e.target.value)); setRcStudent(""); setRcData(null); }} className={inputCls + " bg-white"}>
+            <h2 className="text-base font-bold text-slate-800 mb-1">Single Student Report Card</h2>
+            <p className="text-xs text-slate-400 mb-4">Full consolidated report for one student — all exams in the selected year.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+              <select value={rcClass} onChange={(e) => { setRcClass(Number(e.target.value)); setRcStudent(""); setSingleReport(null); }}
+                className={inputCls + " bg-white"}>
                 <option value={0}>— class —</option>
                 {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
@@ -611,23 +665,25 @@ function ExamsPage() {
                 <option value="">— student —</option>
                 {students.map((s) => <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>)}
               </select>
-              <input value={rcYear} onChange={(e) => setRcYear(e.target.value)} className={inputCls} placeholder="2025-26" />
-              <input value={rcTerm} onChange={(e) => setRcTerm(e.target.value)} className={inputCls} placeholder="Term 1" />
+              <input value={rcYear} onChange={(e) => setRcYear(e.target.value)} className={inputCls} placeholder="Academic year e.g. 2025-26" />
             </div>
             <button
-              disabled={!rcStudent || !rcYear || !rcTerm}
+              disabled={!rcClass || !rcStudent || !rcYear || singleLoading}
               onClick={async () => {
-                if (!rcStudent || !rcYear || !rcTerm) return;
+                if (!rcClass || !rcStudent || !rcYear) return;
+                setSingleLoading(true); setSingleReport(null);
                 try {
-                  const d = await getReportCardDataFn({ data: { studentId: Number(rcStudent), academicYear: rcYear, term: rcTerm } });
-                  setRcData(d);
+                  const d = await getStudentReportFn({ data: { studentId: Number(rcStudent), classId: rcClass, academicYear: rcYear } });
+                  setSingleReport(d);
                 } catch (err: any) { toast(err?.message ?? "Failed to generate", "error"); }
+                finally { setSingleLoading(false); }
               }}
-              className="mb-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm font-semibold rounded-lg transition"
+              className="mb-4 flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm font-semibold rounded-lg transition"
             >
-              Generate
+              {singleLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+              {singleLoading ? "Generating…" : "Generate"}
             </button>
-            {rcData && <ReportCardView rcData={rcData} onClose={() => setRcData(null)} />}
+            {singleReport && <ConsolidatedReportCard report={singleReport} onClose={() => setSingleReport(null)} />}
           </div>
         </div>
       )}
