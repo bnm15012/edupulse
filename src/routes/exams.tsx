@@ -42,24 +42,87 @@ function ConsolidatedReportCard({ report, onClose }: { report: any; onClose?: ()
   const handleDownload = useCallback(async () => {
     if (!pdfRef.current) return;
     setPdfLoading(true);
+
+    // html2canvas can't parse oklch() (Tailwind v4 default).
+    // Inject a style that resets all CSS custom properties to safe hex values
+    // on just our element before capture, then remove after.
+    const safeStyle = document.createElement("style");
+    safeStyle.id = "__rc_oklch_fix";
+    safeStyle.textContent = `
+      #rc-pdf-capture, #rc-pdf-capture * {
+        --tw-ring-color: #bfdbfe !important;
+        color-scheme: light !important;
+      }
+    `;
+    document.head.appendChild(safeStyle);
+    // Force computed styles to use hex by cloning into an isolated div with explicit styles
+    const el = pdfRef.current;
+
     try {
-      const html2pdf = (await import("html2pdf.js")).default;
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import("html2canvas"),
+        import("jspdf"),
+      ]);
+
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: "#ffffff",
+        // Override oklch colours: html2canvas v1 parses inline computed styles
+        // which may still contain oklch. We force a white background and rely on
+        // Tailwind utility classes resolving to rgba/hex at paint time in the browser.
+        onclone: (clonedDoc: Document) => {
+          // html2canvas can't handle oklch() — walk all elements in the
+          // cloned document and replace oklch computed colours with hex fallbacks
+          clonedDoc.querySelectorAll<HTMLElement>("*").forEach((node) => {
+            const cs = clonedDoc.defaultView!.getComputedStyle(node);
+            const styleProps = ["color", "backgroundColor", "borderTopColor", "borderRightColor", "borderBottomColor", "borderLeftColor"] as const;
+            styleProps.forEach((prop) => {
+              const val = cs[prop];
+              if (val && val.includes("oklch")) {
+                node.style[prop as any] = "#1e293b";
+              }
+            });
+          });
+        },
+      });
+
+      const imgData = canvas.toDataURL("image/jpeg", 0.97);
+      const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const margin = 10;
+      const imgW = pageW - margin * 2;
+      const imgH = (canvas.height * imgW) / canvas.width;
+
+      let y = margin;
+      let remaining = imgH;
+      let srcY = 0;
+      const contentH = pageH - margin * 2;
+
+      // Slice into A4 pages if content is taller than one page
+      while (remaining > 0) {
+        const sliceH = Math.min(remaining, contentH);
+        const sliceCanvas = document.createElement("canvas");
+        const ratio = canvas.width / imgW;
+        sliceCanvas.width = canvas.width;
+        sliceCanvas.height = sliceH * ratio;
+        const ctx = sliceCanvas.getContext("2d")!;
+        ctx.drawImage(canvas, 0, srcY * ratio, canvas.width, sliceH * ratio, 0, 0, canvas.width, sliceH * ratio);
+        const sliceData = sliceCanvas.toDataURL("image/jpeg", 0.97);
+        if (srcY > 0) { pdf.addPage(); y = margin; }
+        pdf.addImage(sliceData, "JPEG", margin, y, imgW, sliceH);
+        srcY += sliceH;
+        remaining -= sliceH;
+      }
+
       const studentName = `${report.student.firstName}_${report.student.lastName}`.replace(/\s+/g, "_");
-      const filename = `ReportCard_${studentName}_${report.academicYear}.pdf`;
-      await html2pdf()
-        .set({
-          margin: [10, 12, 10, 12],        // top, right, bottom, left in mm
-          filename,
-          image: { type: "jpeg", quality: 0.98 },
-          html2canvas: { scale: 2, useCORS: true, logging: false },
-          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-          pagebreak: { mode: ["avoid-all", "css"] },
-        })
-        .from(pdfRef.current)
-        .save();
+      pdf.save(`ReportCard_${studentName}_${report.academicYear}.pdf`);
     } catch (e) {
       console.error("PDF generation failed", e);
     } finally {
+      document.getElementById("__rc_oklch_fix")?.remove();
       setPdfLoading(false);
     }
   }, [report]);
