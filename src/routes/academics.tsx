@@ -381,35 +381,91 @@ function AcademicsPage() {
             </button>
           )}
 
-          <div className="space-y-4">
-            {DAYS.filter((_, i) => i > 0).map((d, dayIdx) => {
-              const dayRows = tt.filter((t) => t.dayOfWeek === dayIdx + 1);
-              return (
-                <div key={d}>
-                  <h3 className="text-sm font-bold text-slate-700 mb-2">{d}</h3>
-                  {dayRows.length === 0 ? <p className="text-xs text-slate-400">No periods</p> : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                      {dayRows.sort((a,b) => a.periodNumber - b.periodNumber).map((row) => (
-                        <div key={row.id} className="p-3 rounded-xl border border-slate-200 bg-slate-50">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold text-slate-500">P{row.periodNumber}</span>
-                            {isAdmin && (
-                              <div className="flex gap-1">
-                                <button onClick={() => setTtForm({ id: row.id, dayOfWeek: row.dayOfWeek, periodNumber: row.periodNumber, startTime: row.startTime ?? "", endTime: row.endTime ?? "", subjectId: row.subjectId ?? 0, teacherId: row.teacherId ?? 0 })} className="p-1 text-blue-500 hover:text-blue-700"><Pencil className="w-3 h-3" /></button>
-                                <button onClick={async () => { await deleteTimetableFn({ data: { id: row.id } }); setTt((p) => p.filter((x) => x.id !== row.id)); }} className="p-1 text-red-500 hover:text-red-700"><Trash2 className="w-3 h-3" /></button>
-                              </div>
-                            )}
-                          </div>
-                          <p className="text-sm font-bold text-slate-800">{row.subjectName ?? "—"}</p>
-                          <p className="text-xs text-slate-400">{row.startTime} - {row.endTime}</p>
-                        </div>
+          {/* ── Gantt-style timetable grid ── */}
+          {tt.length === 0 && selectedClass ? (
+            <p className="text-sm text-slate-400 text-center py-8">No periods added yet.</p>
+          ) : tt.length > 0 && (() => {
+            // Collect all unique periods sorted by period number then start time
+            const allPeriods = [...tt]
+              .sort((a, b) => a.periodNumber - b.periodNumber || (a.startTime ?? "").localeCompare(b.startTime ?? ""))
+              .filter((row, idx, arr) => arr.findIndex(r => r.periodNumber === row.periodNumber) === idx); // unique period numbers
+
+            const activeDays = DAYS.map((d, i) => ({ label: d, idx: i }))
+              .filter(({ idx }) => idx > 0 && tt.some(r => r.dayOfWeek === idx));
+
+            // Subject color palette
+            const subjectColors: Record<string, string> = {};
+            const palette = [
+              "bg-blue-50 border-blue-200 text-blue-800",
+              "bg-emerald-50 border-emerald-200 text-emerald-800",
+              "bg-violet-50 border-violet-200 text-violet-800",
+              "bg-amber-50 border-amber-200 text-amber-800",
+              "bg-rose-50 border-rose-200 text-rose-800",
+              "bg-cyan-50 border-cyan-200 text-cyan-800",
+              "bg-orange-50 border-orange-200 text-orange-800",
+              "bg-teal-50 border-teal-200 text-teal-800",
+            ];
+            let colorIdx = 0;
+            const getColor = (subjectName: string | null) => {
+              if (!subjectName) return "bg-slate-50 border-slate-200 text-slate-400";
+              if (!subjectColors[subjectName]) subjectColors[subjectName] = palette[colorIdx++ % palette.length];
+              return subjectColors[subjectName];
+            };
+
+            return (
+              <div className="overflow-x-auto -mx-1">
+                <table className="w-full border-collapse min-w-[600px]">
+                  <thead>
+                    <tr>
+                      {/* Day column header */}
+                      <th className="w-16 py-2 px-3 text-left text-xs font-semibold text-slate-400 bg-slate-50 border border-slate-200 rounded-tl-lg sticky left-0 z-10">Day</th>
+                      {allPeriods.map((p) => (
+                        <th key={p.periodNumber} className="py-2 px-2 text-center bg-slate-50 border border-slate-200 min-w-[110px]">
+                          <p className="text-xs font-bold text-slate-600">P{p.periodNumber}</p>
+                          {p.startTime && p.endTime && (
+                            <p className="text-[10px] text-slate-400 font-normal">{p.startTime} – {p.endTime}</p>
+                          )}
+                        </th>
                       ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeDays.map(({ label, idx }) => (
+                      <tr key={idx} className="group">
+                        <td className="py-2 px-3 text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 sticky left-0 z-10 whitespace-nowrap">{label}</td>
+                        {allPeriods.map((p) => {
+                          const cell = tt.find(r => r.dayOfWeek === idx && r.periodNumber === p.periodNumber);
+                          const colorCls = getColor(cell?.subjectName ?? null);
+                          return (
+                            <td key={p.periodNumber} className="border border-slate-100 p-1.5 align-top">
+                              {cell ? (
+                                <div className={`rounded-lg border px-2 py-1.5 h-full flex flex-col justify-between ${colorCls}`}>
+                                  <div>
+                                    <p className="text-[10px] font-semibold opacity-60 mb-0.5">P{cell.periodNumber}</p>
+                                    <p className="text-xs font-bold leading-tight">{cell.subjectName ?? "—"}</p>
+                                  </div>
+                                  {isAdmin && (
+                                    <div className="flex gap-1 mt-1 justify-end">
+                                      <button onClick={() => setTtForm({ id: cell.id, dayOfWeek: cell.dayOfWeek, periodNumber: cell.periodNumber, startTime: cell.startTime ?? "", endTime: cell.endTime ?? "", subjectId: cell.subjectId ?? 0, teacherId: cell.teacherId ?? 0 })}
+                                        className="p-0.5 text-current opacity-50 hover:opacity-100"><Pencil className="w-2.5 h-2.5" /></button>
+                                      <button onClick={async () => { await deleteTimetableFn({ data: { id: cell.id } }); setTt((prev) => prev.filter((x) => x.id !== cell.id)); }}
+                                        className="p-0.5 text-red-500 opacity-50 hover:opacity-100"><Trash2 className="w-2.5 h-2.5" /></button>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="h-full min-h-[48px] rounded-lg border border-dashed border-slate-200 bg-slate-50/50" />
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
         </div>
       )}
 
