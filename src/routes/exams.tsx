@@ -209,8 +209,11 @@ function ExamsPage() {
   }, [selectedClass]);
 
   useEffect(() => {
-    if (activeTab === "exams" && selectedExam) {
+    // Always load exam subjects whenever an exam is selected (needed by both exams and marks tabs)
+    if (selectedExam) {
       listExamSubjectsFn({ data: { examId: selectedExam.id } }).then((d) => setExamSubjects(d as ExamSubject[]));
+    } else {
+      setExamSubjects([]);
     }
     if (activeTab === "marks" && selectedExam && selectedClass) {
       getStudentsFn({ data: { classId: selectedClass } }).then((d) => setStudents(d as Student[]));
