@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
   ClipboardList, FileText, Plus, X, Pencil, Trash2, Save, Printer,
@@ -34,16 +34,35 @@ function ConsolidatedReportCard({ report, onClose }: { report: any; onClose?: ()
   if (!report) return null;
 
   const addressLine = [report.schoolAddress, report.schoolCity, report.schoolState].filter(Boolean).join(", ");
+  const pdfRef = useRef<HTMLDivElement>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const handlePrint = () => window.print();
-  const handleDownload = () => {
-    const style = document.createElement("style");
-    style.id = "__rc_dl_hint";
-    style.textContent = `@page { size: A4 portrait; margin: 12mm 14mm; }`;
-    document.head.appendChild(style);
-    window.print();
-    setTimeout(() => document.getElementById("__rc_dl_hint")?.remove(), 1000);
-  };
+
+  const handleDownload = useCallback(async () => {
+    if (!pdfRef.current) return;
+    setPdfLoading(true);
+    try {
+      const html2pdf = (await import("html2pdf.js")).default;
+      const studentName = `${report.student.firstName}_${report.student.lastName}`.replace(/\s+/g, "_");
+      const filename = `ReportCard_${studentName}_${report.academicYear}.pdf`;
+      await html2pdf()
+        .set({
+          margin: [10, 12, 10, 12],        // top, right, bottom, left in mm
+          filename,
+          image: { type: "jpeg", quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true, logging: false },
+          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+          pagebreak: { mode: ["avoid-all", "css"] },
+        })
+        .from(pdfRef.current)
+        .save();
+    } catch (e) {
+      console.error("PDF generation failed", e);
+    } finally {
+      setPdfLoading(false);
+    }
+  }, [report]);
 
   return (
     <div className="border border-slate-200 rounded-2xl bg-white overflow-hidden print:border-0 print:rounded-none print:shadow-none">
@@ -59,7 +78,7 @@ function ConsolidatedReportCard({ report, onClose }: { report: any; onClose?: ()
       )}
 
       {/* ── Printable area ── */}
-      <div className="p-8 print:p-0">
+      <div ref={pdfRef} className="p-8 print:p-0">
 
         {/* Letterhead */}
         <div className="flex items-start justify-between pb-4 mb-5 border-b-2 border-slate-800">
@@ -171,8 +190,9 @@ function ConsolidatedReportCard({ report, onClose }: { report: any; onClose?: ()
         <button onClick={handlePrint} className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg transition">
           <Printer className="w-4 h-4" /> Print
         </button>
-        <button onClick={handleDownload} className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition">
-          <Download className="w-4 h-4" /> Download PDF
+        <button onClick={handleDownload} disabled={pdfLoading} className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm font-semibold rounded-lg transition">
+          {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+          {pdfLoading ? "Generating…" : "Download PDF"}
         </button>
       </div>
     </div>
