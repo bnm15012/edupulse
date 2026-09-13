@@ -12,6 +12,7 @@ import {
   listClassesForSchool,
   getSchoolBoard, setSchoolBoard,
   listGradingScales, manageGradingScale, deleteGradingScale, seedDefaultGradingScales,
+  getSession,
 } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { useToast } from "@/lib/toast";
@@ -48,6 +49,9 @@ function AcademicsPage() {
   const manageGradingScaleFn = useServerFn(manageGradingScale);
   const deleteGradingScaleFn = useServerFn(deleteGradingScale);
   const seedDefaultGradingScalesFn = useServerFn(seedDefaultGradingScales);
+
+  const sessionFn = useServerFn(getSession);
+  const [isAdmin, setIsAdmin] = useState(true);
 
   // Shared data
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -87,6 +91,7 @@ function AcademicsPage() {
     listSubjectsFn({ data: { schoolId: tenant.schoolId } }).then((d) => setSubjects(d as Subject[]));
     listClassesFn({ data: { schoolId: tenant.schoolId, locationId: tenant.locationId } }).then((d) => setClasses(d as ClassRow[]));
     getSchoolBoardFn({ data: { schoolId: tenant.schoolId } }).then((d: any) => setSchoolBoardValue(ALLOWED_BOARDS.includes(d) ? d : "preschool"));
+    sessionFn().then((u: any) => u && setIsAdmin(["super_admin","school_admin","location_admin"].includes(u.role)));
   }, [tenant]);
 
   useEffect(() => {
@@ -298,7 +303,7 @@ function AcademicsPage() {
                             </button>
                           </div>
                         </div>
-                      ) : (
+                      ) : isAdmin ? (
                         <div className="grid grid-cols-12 px-6 py-2.5 bg-slate-50 border-t border-slate-100">
                           <div className="col-span-3" />
                           <div className="col-span-9">
@@ -310,7 +315,7 @@ function AcademicsPage() {
                             </button>
                           </div>
                         </div>
-                      )}
+                      ) : null}
                     </>
                   )}
                 </div>
@@ -370,9 +375,11 @@ function AcademicsPage() {
             </div>
           )}
 
-          <button onClick={() => setTtForm({ dayOfWeek: 1, periodNumber: 1, startTime: "", endTime: "", subjectId: 0, teacherId: 0 })} className="mb-4 flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition">
-            <Plus className="w-3.5 h-3.5" /> Add period
-          </button>
+          {isAdmin && (
+            <button onClick={() => setTtForm({ dayOfWeek: 1, periodNumber: 1, startTime: "", endTime: "", subjectId: 0, teacherId: 0 })} className="mb-4 flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition">
+              <Plus className="w-3.5 h-3.5" /> Add period
+            </button>
+          )}
 
           <div className="space-y-4">
             {DAYS.filter((_, i) => i > 0).map((d, dayIdx) => {
@@ -386,10 +393,12 @@ function AcademicsPage() {
                         <div key={row.id} className="p-3 rounded-xl border border-slate-200 bg-slate-50">
                           <div className="flex items-center justify-between">
                             <span className="text-xs font-semibold text-slate-500">P{row.periodNumber}</span>
-                            <div className="flex gap-1">
-                              <button onClick={() => setTtForm({ id: row.id, dayOfWeek: row.dayOfWeek, periodNumber: row.periodNumber, startTime: row.startTime ?? "", endTime: row.endTime ?? "", subjectId: row.subjectId ?? 0, teacherId: row.teacherId ?? 0 })} className="p-1 text-blue-500 hover:text-blue-700"><Pencil className="w-3 h-3" /></button>
-                              <button onClick={async () => { await deleteTimetableFn({ data: { id: row.id } }); setTt((p) => p.filter((x) => x.id !== row.id)); }} className="p-1 text-red-500 hover:text-red-700"><Trash2 className="w-3 h-3" /></button>
-                            </div>
+                            {isAdmin && (
+                              <div className="flex gap-1">
+                                <button onClick={() => setTtForm({ id: row.id, dayOfWeek: row.dayOfWeek, periodNumber: row.periodNumber, startTime: row.startTime ?? "", endTime: row.endTime ?? "", subjectId: row.subjectId ?? 0, teacherId: row.teacherId ?? 0 })} className="p-1 text-blue-500 hover:text-blue-700"><Pencil className="w-3 h-3" /></button>
+                                <button onClick={async () => { await deleteTimetableFn({ data: { id: row.id } }); setTt((p) => p.filter((x) => x.id !== row.id)); }} className="p-1 text-red-500 hover:text-red-700"><Trash2 className="w-3 h-3" /></button>
+                              </div>
+                            )}
                           </div>
                           <p className="text-sm font-bold text-slate-800">{row.subjectName ?? "—"}</p>
                           <p className="text-xs text-slate-400">{row.startTime} - {row.endTime}</p>
@@ -415,23 +424,25 @@ function AcademicsPage() {
                 <option value="CBSE">CBSE</option>
                 <option value="ICSE">ICSE</option>
               </select>
-              <button onClick={async () => {
-                if (!tenant) return;
-                try {
-                  await setSchoolBoardFn({ data: { schoolId: tenant.schoolId, board: schoolBoard as any } });
-                  if (schoolBoard !== "preschool") {
-                    await seedDefaultGradingScalesFn({ data: { board: schoolBoard } });
-                    const d = await listGradingScalesFn({ data: { board: schoolBoard } });
-                    setGradingScalesList(d as Scale[]);
-                    toast("Board saved and default grading scales applied", "success");
-                  } else {
-                    toast("Board saved successfully", "success");
+              {isAdmin && (
+                <button onClick={async () => {
+                  if (!tenant) return;
+                  try {
+                    await setSchoolBoardFn({ data: { schoolId: tenant.schoolId, board: schoolBoard as any } });
+                    if (schoolBoard !== "preschool") {
+                      await seedDefaultGradingScalesFn({ data: { board: schoolBoard } });
+                      const d = await listGradingScalesFn({ data: { board: schoolBoard } });
+                      setGradingScalesList(d as Scale[]);
+                      toast("Board saved and default grading scales applied", "success");
+                    } else {
+                      toast("Board saved successfully", "success");
+                    }
+                  } catch (err: any) {
+                    toast(err?.message ?? "Failed to save board", "error");
                   }
-                } catch (err: any) {
-                  toast(err?.message ?? "Failed to save board", "error");
-                }
-              }} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg">Save board</button>
-              {schoolBoard !== "preschool" && (
+                }} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg">Save board</button>
+              )}
+              {isAdmin && schoolBoard !== "preschool" && (
                 <button onClick={async () => {
                   try {
                     const result = await seedDefaultGradingScalesFn({ data: { board: schoolBoard } }) as any;
@@ -481,7 +492,7 @@ function AcademicsPage() {
                 </div>
               </div>
             )}
-            <button onClick={() => setScaleForm({ name: "", minPercentage: "", maxPercentage: "", gradePoint: "" })} className="mb-3 flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg"><Plus className="w-3.5 h-3.5" /> Add scale</button>
+            {isAdmin && <button onClick={() => setScaleForm({ name: "", minPercentage: "", maxPercentage: "", gradePoint: "" })} className="mb-3 flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg"><Plus className="w-3.5 h-3.5" /> Add scale</button>}
             <div className="overflow-x-auto rounded-xl border border-slate-200">
               <table className="w-full min-w-[420px] text-sm">
                 <thead className="bg-slate-50"><tr><th className="px-4 py-2 text-left">Grade</th><th className="px-4 py-2">Min %</th><th className="px-4 py-2">Max %</th><th className="px-4 py-2">Grade Point</th><th></th></tr></thead>
@@ -493,8 +504,10 @@ function AcademicsPage() {
                     <td className="px-4 py-2 text-center">{s.maxPercentage}</td>
                     <td className="px-4 py-2 text-center">{s.gradePoint ?? "—"}</td>
                     <td className="px-4 py-2 text-right flex gap-1 justify-end">
-                      <button onClick={() => setScaleForm({ id: s.id, name: s.name, minPercentage: String(s.minPercentage), maxPercentage: String(s.maxPercentage), gradePoint: s.gradePoint ? String(s.gradePoint) : "" })} className="p-1 text-blue-500 hover:text-blue-700"><Pencil className="w-3.5 h-3.5" /></button>
-                      <button onClick={async () => { await deleteGradingScaleFn({ data: { id: s.id } }); setGradingScalesList((p) => p.filter((x) => x.id !== s.id)); }} className="p-1 text-red-500 hover:text-red-700"><Trash2 className="w-3.5 h-3.5" /></button>
+                      {isAdmin && <>
+                        <button onClick={() => setScaleForm({ id: s.id, name: s.name, minPercentage: String(s.minPercentage), maxPercentage: String(s.maxPercentage), gradePoint: s.gradePoint ? String(s.gradePoint) : "" })} className="p-1 text-blue-500 hover:text-blue-700"><Pencil className="w-3.5 h-3.5" /></button>
+                        <button onClick={async () => { await deleteGradingScaleFn({ data: { id: s.id } }); setGradingScalesList((p) => p.filter((x) => x.id !== s.id)); }} className="p-1 text-red-500 hover:text-red-700"><Trash2 className="w-3.5 h-3.5" /></button>
+                      </>}
                     </td>
                   </tr>
                 ))}

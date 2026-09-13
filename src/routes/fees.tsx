@@ -6,7 +6,7 @@ import {
   Pencil, Save, XCircle, CheckCircle2, Clock, Ban, Layers, Trash2,
   Banknote, Send, CreditCard, Loader2, RefreshCw,
 } from "lucide-react";
-import { listInvoices, addInvoice, updateInvoice, listStudents, listFeeStructures, addFeeStructure, updateFeeStructure, archiveFeeStructure, listClassesForSchool, runFeeAutomation, markInvoicePaid, sendInvoice, createRazorpayOrder, verifyRazorpayPayment } from "@/lib/auth";
+import { listInvoices, addInvoice, updateInvoice, listStudents, listFeeStructures, addFeeStructure, updateFeeStructure, archiveFeeStructure, listClassesForSchool, runFeeAutomation, markInvoicePaid, sendInvoice, createRazorpayOrder, verifyRazorpayPayment, getSession } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { useToast } from "@/lib/toast";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -355,7 +355,7 @@ function FeeStructureModal({ initial, onClose, onSaved, schoolId, locationId, cl
 
 // ── Fee Structures Tab ────────────────────────────────────────────────────
 
-function FeeStructuresTab({ schoolId, locationId, classes }: { schoolId: number; locationId: number; classes: ClassOption[] }) {
+function FeeStructuresTab({ schoolId, locationId, classes, isAdmin = true }: { schoolId: number; locationId: number; classes: ClassOption[]; isAdmin?: boolean }) {
   const listFn = useServerFn(listFeeStructures);
   const archiveFn = useServerFn(archiveFeeStructure);
 
@@ -392,10 +392,12 @@ function FeeStructuresTab({ schoolId, locationId, classes }: { schoolId: number;
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <p className="text-sm text-slate-500">{loading ? "Loading…" : `${structures.length} fee structure${structures.length !== 1 ? "s" : ""}`}</p>
-        <button onClick={() => { setEditing(null); setModalOpen(true); }}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold rounded-xl transition shadow-sm">
-          <Plus className="w-4 h-4" /> Add Structure
-        </button>
+        {isAdmin && (
+          <button onClick={() => { setEditing(null); setModalOpen(true); }}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold rounded-xl transition shadow-sm">
+            <Plus className="w-4 h-4" /> Add Structure
+          </button>
+        )}
       </div>
 
       {error && <div className="flex items-center gap-3 bg-red-50 text-red-700 p-4 rounded-2xl border border-red-200 text-sm"><AlertCircle className="w-5 h-5 shrink-0" />{error}</div>}
@@ -438,16 +440,18 @@ function FeeStructuresTab({ schoolId, locationId, classes }: { schoolId: number;
                   <td className="px-5 py-4 text-slate-500">{fs.dueDay ? `Day ${fs.dueDay}` : "—"}</td>
                   <td className="px-5 py-4 text-slate-500">{fs.className ?? <span className="text-slate-300">All classes</span>}</td>
                   <td className="px-5 py-4">
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
-                      <button onClick={() => { setEditing(fs); setModalOpen(true); }}
-                        className="p-1.5 rounded-lg hover:bg-violet-50 text-violet-500 hover:text-violet-700 transition">
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={() => remove(fs)}
-                        className="p-1.5 rounded-lg hover:bg-red-50 text-red-500 hover:text-red-700 transition">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    {isAdmin && (
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                        <button onClick={() => { setEditing(fs); setModalOpen(true); }}
+                          className="p-1.5 rounded-lg hover:bg-violet-50 text-violet-500 hover:text-violet-700 transition">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => remove(fs)}
+                          className="p-1.5 rounded-lg hover:bg-red-50 text-red-500 hover:text-red-700 transition">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -565,7 +569,9 @@ function Fees() {
   const updateFn = useServerFn(updateInvoice);
   const runAutomationFn = useServerFn(runFeeAutomation);
   const sendInvoiceFn = useServerFn(sendInvoice);
+  const sessionFn = useServerFn(getSession);
 
+  const [isAdmin, setIsAdmin] = useState(true);
   const [tab, setTab] = useState<"invoices" | "structures">("invoices");
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [students, setStudents] = useState<StudentOption[]>([]);
@@ -606,6 +612,7 @@ function Fees() {
     runAutomationFn({ data: { schoolId: tenant.schoolId, locationId: tenant.locationId } })
       .catch(() => {}); // silent — non-fatal
   }, [tenant.schoolId, tenant.locationId]);
+  useEffect(() => { sessionFn().then((u: any) => u && setIsAdmin(["super_admin","school_admin","location_admin"].includes(u.role))); }, []);
 
   const handleCancel = (inv: Invoice, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -682,7 +689,7 @@ function Fees() {
           <h1 className="text-2xl font-bold text-slate-900">Fee Management</h1>
           <p className="text-sm text-slate-500 mt-0.5">Invoices, structures &amp; payment tracking</p>
         </div>
-        {tab === "invoices" && (
+        {tab === "invoices" && isAdmin && (
           <div className="flex items-center gap-2 shrink-0 flex-wrap">
             <button onClick={handleRunAutomation} disabled={automating}
               className="inline-flex items-center gap-2 px-3 py-2.5 border border-slate-200 text-slate-600 hover:border-violet-300 hover:text-violet-700 hover:bg-violet-50 text-sm font-semibold rounded-xl transition disabled:opacity-50"
@@ -805,55 +812,57 @@ function Fees() {
                         </td>
                         <td className="px-5 py-4">
                           <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                            {/* Send (draft → sent + email parent) */}
-                            {inv.status === "draft" && (
+                            {isAdmin && (<>
+                              {/* Send (draft → sent + email parent) */}
+                              {inv.status === "draft" && (
+                                <button
+                                  onClick={(e) => handleSendInvoice(inv, e)}
+                                  disabled={sendingId === inv.id}
+                                  className="p-1.5 rounded-lg text-violet-500 hover:text-violet-700 hover:bg-violet-50 transition disabled:opacity-40"
+                                  title="Send invoice to parent"
+                                >
+                                  {sendingId === inv.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                                </button>
+                              )}
+                              {/* Resend reminder */}
+                              {(inv.status === "sent" || inv.status === "overdue") && (
+                                <button
+                                  onClick={(e) => handleSendInvoice(inv, e)}
+                                  disabled={sendingId === inv.id}
+                                  className="p-1.5 rounded-lg text-violet-500 hover:text-violet-700 hover:bg-violet-50 transition disabled:opacity-40"
+                                  title="Resend / remind parent"
+                                >
+                                  {sendingId === inv.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                                </button>
+                              )}
+                              {/* Mark as Paid (cash/manual) */}
+                              {(inv.status === "sent" || inv.status === "overdue") && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setCashPayInvoice(inv); }}
+                                  className="p-1.5 rounded-lg text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 transition"
+                                  title="Mark as paid (cash/manual)"
+                                >
+                                  <Banknote className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                               <button
-                                onClick={(e) => handleSendInvoice(inv, e)}
-                                disabled={sendingId === inv.id}
-                                className="p-1.5 rounded-lg text-violet-500 hover:text-violet-700 hover:bg-violet-50 transition disabled:opacity-40"
-                                title="Send invoice to parent"
+                                onClick={(e) => { e.stopPropagation(); setSelected(inv); }}
+                                className="p-1.5 rounded-lg text-blue-500 hover:text-blue-700 hover:bg-blue-50 transition"
+                                title="Edit invoice"
                               >
-                                {sendingId === inv.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                                <Pencil className="w-3.5 h-3.5" />
                               </button>
-                            )}
-                            {/* Resend reminder */}
-                            {(inv.status === "sent" || inv.status === "overdue") && (
-                              <button
-                                onClick={(e) => handleSendInvoice(inv, e)}
-                                disabled={sendingId === inv.id}
-                                className="p-1.5 rounded-lg text-violet-500 hover:text-violet-700 hover:bg-violet-50 transition disabled:opacity-40"
-                                title="Resend / remind parent"
-                              >
-                                {sendingId === inv.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                              </button>
-                            )}
-                            {/* Mark as Paid (cash/manual) */}
-                            {(inv.status === "sent" || inv.status === "overdue") && (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); setCashPayInvoice(inv); }}
-                                className="p-1.5 rounded-lg text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 transition"
-                                title="Mark as paid (cash/manual)"
-                              >
-                                <Banknote className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setSelected(inv); }}
-                              className="p-1.5 rounded-lg text-blue-500 hover:text-blue-700 hover:bg-blue-50 transition"
-                              title="Edit invoice"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                            {inv.status !== "cancelled" && inv.status !== "paid" && (
-                              <button
-                                onClick={(e) => handleCancel(inv, e)}
-                                disabled={cancellingId === inv.id}
-                                className="p-1.5 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 transition disabled:opacity-40"
-                                title="Cancel invoice"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
+                              {inv.status !== "cancelled" && inv.status !== "paid" && (
+                                <button
+                                  onClick={(e) => handleCancel(inv, e)}
+                                  disabled={cancellingId === inv.id}
+                                  className="p-1.5 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 transition disabled:opacity-40"
+                                  title="Cancel invoice"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </>)}
                             <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-500 transition ml-1" />
                           </div>
                         </td>
@@ -877,7 +886,7 @@ function Fees() {
       )}
 
       {tab === "structures" && (
-        <FeeStructuresTab schoolId={tenant.schoolId} locationId={tenant.locationId} classes={classes} />
+        <FeeStructuresTab schoolId={tenant.schoolId} locationId={tenant.locationId} classes={classes} isAdmin={isAdmin} />
       )}
 
       {addOpen && <AddInvoiceModal onClose={() => setAddOpen(false)} onSaved={() => { setAddOpen(false); load(); toast("Invoice created", "success"); }} schoolId={tenant.schoolId} locationId={tenant.locationId} students={students} />}

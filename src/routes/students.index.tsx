@@ -7,7 +7,7 @@ import {
   Pencil, Save, XCircle, Baby, Trash2,
   FileText, Upload, ExternalLink, Loader2,
 } from "lucide-react";
-import { listStudents, addStudent, archiveStudent, listClassesForSchool } from "@/lib/auth";
+import { listStudents, addStudent, archiveStudent, listClassesForSchool, getSession } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { useToast } from "@/lib/toast";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -307,6 +307,8 @@ function AddStudentModal({
 
 // ── Main Students Page ─────────────────────────────────────────────────────
 
+const ADMIN_ROLES = ["super_admin", "school_admin", "location_admin"];
+
 function Students() {
   const { tenant } = useTenant();
   const toast = useToast();
@@ -314,6 +316,7 @@ function Students() {
   const listFn = useServerFn(listStudents);
   const listClassesFn = useServerFn(listClassesForSchool);
   const archiveFn = useServerFn(archiveStudent);
+  const sessionFn = useServerFn(getSession);
 
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [classes, setClasses] = useState<ClassOption[]>([]);
@@ -323,6 +326,7 @@ function Students() {
   const [addOpen, setAddOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [confirmStudent, setConfirmStudent] = useState<StudentRow | null>(null);
+  const [isAdmin, setIsAdmin] = useState(true);
 
   const PAGE_SIZE = 12;
 
@@ -338,6 +342,7 @@ function Students() {
   };
 
   useEffect(() => { load(); }, [tenant.schoolId, tenant.locationId]);
+  useEffect(() => { sessionFn().then((u: any) => u && setIsAdmin(ADMIN_ROLES.includes(u.role))); }, []);
 
   const handleDelete = (s: StudentRow, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -381,13 +386,15 @@ function Students() {
             {loading ? "Loading…" : `${students.length} student${students.length !== 1 ? "s" : ""} enrolled`}
           </p>
         </div>
-        <button
-          onClick={() => setAddOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition shadow-sm shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add Student</span>
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setAddOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition shadow-sm shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Student</span>
+          </button>
+        )}
       </div>
 
       {/* Search */}
@@ -491,14 +498,16 @@ function Students() {
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
-                        <button
-                          onClick={(e) => handleDelete(s, e)}
-                          disabled={deletingId === s.id}
-                          className="p-1.5 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 transition disabled:opacity-40"
-                          title="Archive student"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {isAdmin && (
+                          <button
+                            onClick={(e) => handleDelete(s, e)}
+                            disabled={deletingId === s.id}
+                            className="p-1.5 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 transition disabled:opacity-40"
+                            title="Archive student"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-500 transition ml-1" />
                       </div>
                     </td>

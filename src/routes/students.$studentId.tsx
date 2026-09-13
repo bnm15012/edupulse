@@ -11,7 +11,7 @@ import {
   updateEmergencyContact, addEmergencyContact,
   uploadDocument, listDocuments, deleteDocument,
   getStudentAttendanceSummary, uploadReportCard, listReportCards, deleteReportCard,
-  promoteStudent,
+  promoteStudent, getSession,
 } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { useToast } from "@/lib/toast";
@@ -117,7 +117,9 @@ function StudentDetailPage() {
   const uploadReportCardFn = useServerFn(uploadReportCard);
   const listReportCardsFn = useServerFn(listReportCards);
   const deleteReportCardFn = useServerFn(deleteReportCard);
+  const sessionFn = useServerFn(getSession);
 
+  const [isAdmin, setIsAdmin] = useState(true);
   const [detail, setDetail] = useState<DetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -242,6 +244,7 @@ function StudentDetailPage() {
   };
 
   useEffect(() => { load(); }, [studentId]);
+  useEffect(() => { sessionFn().then((u: any) => u && setIsAdmin(["super_admin","school_admin","location_admin"].includes(u.role))); }, []);
 
   const eSet = (k: string, v: string) => setEf((p: any) => ({ ...p, [k]: v }));
 
@@ -320,7 +323,7 @@ function StudentDetailPage() {
               )}
             </div>
             <div className="flex items-center gap-2">
-              {!loading && !editing && (
+              {!loading && !editing && isAdmin && (
                 <button
                   onClick={() => setEditing(true)}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 text-white text-xs font-semibold rounded-lg transition"
@@ -656,15 +659,17 @@ function StudentDetailPage() {
             {/* Class history tab */}
             {activeTab === "history" && (
               <Section icon={BookOpen} title="Class enrollment history" color="bg-emerald-50 text-emerald-700">
-                {/* Promote button */}
-                <div className="flex justify-end mb-4">
-                  <button
-                    onClick={() => { setShowPromote(true); setPromoteClassId(""); setPromoteYear(""); }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition"
-                  >
-                    <GraduationCap className="w-3.5 h-3.5" /> Promote to next class
-                  </button>
-                </div>
+                {/* Promote button — admin only */}
+                {isAdmin && (
+                  <div className="flex justify-end mb-4">
+                    <button
+                      onClick={() => { setShowPromote(true); setPromoteClassId(""); setPromoteYear(""); }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition"
+                    >
+                      <GraduationCap className="w-3.5 h-3.5" /> Promote to next class
+                    </button>
+                  </div>
+                )}
 
                 {/* Promote modal */}
                 {showPromote && (
@@ -1017,13 +1022,14 @@ function StudentDetailPage() {
             {/* Report Cards tab */}
             {activeTab === "reportcards" && (
               <Section icon={GraduationCap} title="Report Cards" color="bg-violet-50 text-violet-700">
-                {/* Upload form toggle */}
-                {!rcShowForm ? (
+                {/* Upload form toggle — admin only */}
+                {isAdmin && !rcShowForm && (
                   <button onClick={() => setRcShowForm(true)}
                     className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold rounded-xl transition mb-4">
                     <Plus className="w-4 h-4" /> Upload Report Card
                   </button>
-                ) : (
+                )}
+                {isAdmin && rcShowForm && (
                   <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 mb-4 space-y-3">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-bold text-violet-800">Upload Report Card</p>
@@ -1147,13 +1153,15 @@ function StudentDetailPage() {
                                       <ExternalLink className="w-3.5 h-3.5" /> View
                                     </a>
                                   )}
-                                  <button onClick={async () => {
-                                    if (!confirm(`Delete "${rc.term} ${year}" report card?`)) return;
-                                    await deleteReportCardFn({ data: { id: rc.id } });
-                                    setReportCardsList((prev) => prev.filter((r) => r.id !== rc.id));
-                                  }} className="p-1.5 rounded-lg bg-slate-50 hover:bg-red-50 text-red-500 hover:text-red-700 border border-red-200 transition">
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
+                                  {isAdmin && (
+                                    <button onClick={async () => {
+                                      if (!confirm(`Delete "${rc.term} ${year}" report card?`)) return;
+                                      await deleteReportCardFn({ data: { id: rc.id } });
+                                      setReportCardsList((prev) => prev.filter((r) => r.id !== rc.id));
+                                    }} className="p-1.5 rounded-lg bg-slate-50 hover:bg-red-50 text-red-500 hover:text-red-700 border border-red-200 transition">
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             ))}

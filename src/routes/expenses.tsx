@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Plus, Pencil, Trash2, Wallet, Search, Save, X } from "lucide-react";
-import { manageExpense, listExpenses, deleteExpense, listStaff } from "@/lib/auth";
+import { manageExpense, listExpenses, deleteExpense, listStaff, getSession } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { useToast } from "@/lib/toast";
 import { usePagination } from "@/lib/usePagination";
@@ -28,6 +28,9 @@ function ExpensesPage() {
   const listExpensesFn = useServerFn(listExpenses);
   const deleteExpenseFn = useServerFn(deleteExpense);
   const listStaffFn = useServerFn(listStaff);
+  const sessionFn = useServerFn(getSession);
+
+  const [isAdmin, setIsAdmin] = useState(true);
 
   const today = todayIST();
   const [year, month] = today.split("-").map(Number);
@@ -64,6 +67,8 @@ function ExpensesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenant]);
 
+  useEffect(() => { sessionFn().then((u: any) => u && setIsAdmin(["super_admin","school_admin","location_admin"].includes(u.role))); }, []);
+
   useEffect(() => {
     if (!tenant) return;
     listStaffFn({ data: { schoolId: tenant.schoolId, locationId: tenant.locationId } })
@@ -78,7 +83,7 @@ function ExpensesPage() {
     <div className="w-full max-w-none space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-slate-900">Expenses</h1>
-        <button onClick={() => setForm({ category: CATEGORIES[0], description: "", amount: "", expenseDate: today, staffId: undefined })} className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg"><Plus className="w-4 h-4" /> Add Expense</button>
+        {isAdmin && <button onClick={() => setForm({ category: CATEGORIES[0], description: "", amount: "", expenseDate: today, staffId: undefined })} className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg"><Plus className="w-4 h-4" /> Add Expense</button>}
       </div>
 
       {/* Date filter */}
@@ -171,8 +176,10 @@ function ExpensesPage() {
                   <td className="px-4 py-2.5 text-slate-500">{e.expenseDate ? new Date(e.expenseDate).toLocaleDateString("en-IN") : "—"}</td>
                   <td className="px-4 py-2.5 text-right font-medium text-slate-800">{money(parseFloat(e.amount))}</td>
                   <td className="px-4 py-2.5 text-right">
-                    <button onClick={() => setForm({ id: e.id, category: e.category, description: e.description ?? "", amount: String(e.amount), expenseDate: e.expenseDate ? new Date(e.expenseDate).toISOString().slice(0, 10) : today, staffId: undefined })} className="p-1.5 text-blue-500 hover:text-blue-700"><Pencil className="w-3.5 h-3.5" /></button>
-                    <button onClick={async () => { await deleteExpenseFn({ data: { id: e.id, schoolId: tenant.schoolId, locationId: tenant.locationId } }); await load(); }} className="p-1.5 text-red-500 hover:text-red-700"><Trash2 className="w-3.5 h-3.5" /></button>
+                    {isAdmin && <>
+                      <button onClick={() => setForm({ id: e.id, category: e.category, description: e.description ?? "", amount: String(e.amount), expenseDate: e.expenseDate ? new Date(e.expenseDate).toISOString().slice(0, 10) : today, staffId: undefined })} className="p-1.5 text-blue-500 hover:text-blue-700"><Pencil className="w-3.5 h-3.5" /></button>
+                      <button onClick={async () => { await deleteExpenseFn({ data: { id: e.id, schoolId: tenant.schoolId, locationId: tenant.locationId } }); await load(); }} className="p-1.5 text-red-500 hover:text-red-700"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </>}
                   </td>
                 </tr>
               ))}

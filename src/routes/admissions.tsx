@@ -6,7 +6,7 @@ import {
   User, FileText,
   Pencil, Save, XCircle, ArrowRight, CheckCircle2, Trash2, Mail, Loader2,
 } from "lucide-react";
-import { listInquiries, addInquiry, updateInquiry, archiveInquiry, sendParentInvite, enrollFromAdmission, listClassesForSchool } from "@/lib/auth";
+import { listInquiries, addInquiry, updateInquiry, archiveInquiry, sendParentInvite, enrollFromAdmission, listClassesForSchool, getSession } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { useToast } from "@/lib/toast";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -189,12 +189,14 @@ function InquiryDrawer({
   onUpdated,
   schoolId,
   locationId,
+  isAdmin = true,
 }: {
   inquiry: Inquiry;
   onClose: () => void;
   onUpdated: (updated: Inquiry) => void;
   schoolId: number;
   locationId: number;
+  isAdmin?: boolean;
 }) {
   const updateFn = useServerFn(updateInquiry);
   const sendInviteFn = useServerFn(sendParentInvite);
@@ -337,13 +339,13 @@ function InquiryDrawer({
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {!editing && (
+              {isAdmin && !editing && (
                 <button onClick={() => { setEf({ ...inquiry, childDob: toDateStr(inquiry.childDob) }); setEditing(true); }}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 text-white text-xs font-semibold rounded-lg transition">
                   <Pencil className="w-3.5 h-3.5" /> Edit
                 </button>
               )}
-              {editing && (
+              {isAdmin && editing && (
                 <>
                   <button onClick={() => { setEditing(false); setError(""); }}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 text-white text-xs font-semibold rounded-lg transition">
@@ -368,48 +370,50 @@ function InquiryDrawer({
             </span>
           </div>
 
-          {/* Pipeline stepper */}
-          <div className="flex items-center gap-1 pb-4 overflow-x-auto">
-            {PIPELINE_STEPS.map((step, idx) => {
-              const sCfg = statusConfig(step);
-              const isDone = currentPipelineIdx > idx;
-              const isCurrent = inquiry.status === step;
-              return (
-                <div key={step} className="flex items-center gap-1 shrink-0">
+          {/* Pipeline stepper — admin only */}
+          {isAdmin && (
+            <div className="flex items-center gap-1 pb-4 overflow-x-auto">
+              {PIPELINE_STEPS.map((step, idx) => {
+                const sCfg = statusConfig(step);
+                const isDone = currentPipelineIdx > idx;
+                const isCurrent = inquiry.status === step;
+                return (
+                  <div key={step} className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => !isCurrent && !statusSaving && moveStatus(step)}
+                      disabled={statusSaving || isCurrent}
+                      className={`text-[11px] font-bold px-2.5 py-1 rounded-full border transition ${
+                        isCurrent
+                          ? "bg-white text-blue-700 border-white shadow"
+                          : isDone
+                          ? "bg-white/30 text-white border-white/30 hover:bg-white/40"
+                          : "bg-white/10 text-white/60 border-white/20 hover:bg-white/20"
+                      }`}
+                    >
+                      {isDone && <CheckCircle2 className="w-3 h-3 inline mr-1" />}
+                      {sCfg.label}
+                    </button>
+                    {idx < PIPELINE_STEPS.length - 1 && (
+                      <ArrowRight className="w-3 h-3 text-white/30 shrink-0" />
+                    )}
+                  </div>
+                );
+              })}
+              {/* Waitlisted / Rejected outside pipeline */}
+              {(inquiry.status === "waitlisted" || inquiry.status === "rejected") ? null : (
+                <div className="flex items-center gap-1 shrink-0 ml-2">
+                  <span className="text-white/30 text-xs">·</span>
                   <button
-                    onClick={() => !isCurrent && !statusSaving && moveStatus(step)}
-                    disabled={statusSaving || isCurrent}
-                    className={`text-[11px] font-bold px-2.5 py-1 rounded-full border transition ${
-                      isCurrent
-                        ? "bg-white text-blue-700 border-white shadow"
-                        : isDone
-                        ? "bg-white/30 text-white border-white/30 hover:bg-white/40"
-                        : "bg-white/10 text-white/60 border-white/20 hover:bg-white/20"
-                    }`}
+                    onClick={() => !statusSaving && moveStatus("rejected")}
+                    disabled={statusSaving}
+                    className="text-[11px] font-bold px-2.5 py-1 rounded-full border bg-red-500/20 text-red-200 border-red-300/30 hover:bg-red-500/30 transition"
                   >
-                    {isDone && <CheckCircle2 className="w-3 h-3 inline mr-1" />}
-                    {sCfg.label}
+                    Reject
                   </button>
-                  {idx < PIPELINE_STEPS.length - 1 && (
-                    <ArrowRight className="w-3 h-3 text-white/30 shrink-0" />
-                  )}
                 </div>
-              );
-            })}
-            {/* Waitlisted / Rejected outside pipeline */}
-            {(inquiry.status === "waitlisted" || inquiry.status === "rejected") ? null : (
-              <div className="flex items-center gap-1 shrink-0 ml-2">
-                <span className="text-white/30 text-xs">·</span>
-                <button
-                  onClick={() => !statusSaving && moveStatus("rejected")}
-                  disabled={statusSaving}
-                  className="text-[11px] font-bold px-2.5 py-1 rounded-full border bg-red-500/20 text-red-200 border-red-300/30 hover:bg-red-500/30 transition"
-                >
-                  Reject
-                </button>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Body */}
@@ -447,8 +451,8 @@ function InquiryDrawer({
                   <InfoRow label="Name" value={inquiry.parentName} />
                   <InfoRow label="Email" value={inquiry.email} />
                   <InfoRow label="Phone" value={inquiry.phone} />
-                  {/* Parent portal invite — only show when enrolled and has email */}
-                  {inquiry.status === "enrolled" && inquiry.email && (
+                  {/* Parent portal invite — admin only, when enrolled and has email */}
+                  {isAdmin && inquiry.status === "enrolled" && inquiry.email && (
                     <div className="pt-2 border-t border-slate-100">
                       {inviteToken ? (
                         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 space-y-2">
@@ -717,6 +721,7 @@ function Admissions() {
   const toast = useToast();
   const listFn = useServerFn(listInquiries);
   const archiveFn = useServerFn(archiveInquiry);
+  const sessionFn = useServerFn(getSession);
 
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -727,6 +732,7 @@ function Admissions() {
   const [selected, setSelected] = useState<Inquiry | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [confirmInquiry, setConfirmInquiry] = useState<Inquiry | null>(null);
+  const [isAdmin, setIsAdmin] = useState(true);
 
   const PAGE_SIZE = 12;
 
@@ -739,6 +745,7 @@ function Admissions() {
   };
 
   useEffect(() => { load(); }, [tenant.schoolId, tenant.locationId]);
+  useEffect(() => { sessionFn().then((u: any) => u && setIsAdmin(["super_admin","school_admin","location_admin"].includes(u.role))); }, []);
 
   const handleDelete = (inq: Inquiry, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -788,13 +795,15 @@ function Admissions() {
             {loading ? "Loading…" : `${inquiries.length} inquir${inquiries.length !== 1 ? "ies" : "y"}`}
           </p>
         </div>
-        <button
-          onClick={() => setAddOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
-          Add Inquiry
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setAddOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            Add Inquiry
+          </button>
+        )}
       </div>
 
       {/* Search + status filters */}
@@ -906,14 +915,16 @@ function Admissions() {
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
-                        <button
-                          onClick={(e) => handleDelete(inq, e)}
-                          disabled={deletingId === inq.id}
-                          className="p-1.5 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 transition disabled:opacity-40"
-                          title="Archive inquiry"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {isAdmin && (
+                          <button
+                            onClick={(e) => handleDelete(inq, e)}
+                            disabled={deletingId === inq.id}
+                            className="p-1.5 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 transition disabled:opacity-40"
+                            title="Archive inquiry"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-500 transition ml-1" />
                       </div>
                     </td>
@@ -948,6 +959,7 @@ function Admissions() {
       {selected && (
         <InquiryDrawer
           inquiry={selected}
+          isAdmin={isAdmin}
           onClose={() => setSelected(null)}
           schoolId={tenant.schoolId}
           locationId={tenant.locationId}

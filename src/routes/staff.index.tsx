@@ -6,7 +6,7 @@ import {
   X, Plus, Search, Mail, CheckCircle2, AlertCircle,
   ChevronRight, Briefcase, Pencil, Trash2, ShieldCheck, Clock, UserX,
 } from "lucide-react";
-import { listStaff, addStaffMember, archiveStaff, resendStaffInvite } from "@/lib/auth";
+import { listStaff, addStaffMember, archiveStaff, resendStaffInvite, getSession } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { useToast } from "@/lib/toast";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -353,7 +353,9 @@ function Staff() {
   const navigate = useNavigate();
   const listFn = useServerFn(listStaff);
   const archiveFn = useServerFn(archiveStaff);
+  const sessionFn = useServerFn(getSession);
 
+  const [isAdmin, setIsAdmin] = useState(true);
   const [rows, setRows] = useState<StaffRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -375,6 +377,7 @@ function Staff() {
       .finally(() => setLoading(false));
   };
   useEffect(() => { load(); }, [tenant.schoolId, tenant.locationId]);
+  useEffect(() => { sessionFn().then((u: any) => u && setIsAdmin(["super_admin","school_admin","location_admin"].includes(u.role))); }, []);
 
   const doDelete = async () => {
     if (!confirmStaff) return;
@@ -417,7 +420,7 @@ function Staff() {
             {loading ? "Loading…" : `${view === "active" ? activeRows.length : archivedRows.length} ${view} staff member${(view === "active" ? activeRows.length : archivedRows.length) !== 1 ? "s" : ""}`}
           </p>
         </div>
-        {view === "active" && (
+        {isAdmin && view === "active" && (
           <button onClick={() => setAddOpen(true)} className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition shadow-sm">
             <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Add Staff</span>
           </button>
@@ -528,14 +531,16 @@ function Staff() {
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); navigate({ to: "/staff/$staffId", params: { staffId: String(s.id) } }); }}
-                          className="p-1.5 rounded-lg text-blue-500 hover:text-blue-700 hover:bg-blue-50 transition"
-                          title="Edit"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        {view === "active" && (
+                        {isAdmin && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); navigate({ to: "/staff/$staffId", params: { staffId: String(s.id) } }); }}
+                            className="p-1.5 rounded-lg text-blue-500 hover:text-blue-700 hover:bg-blue-50 transition"
+                            title="Edit"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {isAdmin && view === "active" && (
                           <button
                             onClick={(e) => { e.stopPropagation(); setConfirmStaff(s); }}
                             disabled={deletingId === s.id}
