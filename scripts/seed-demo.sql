@@ -3,9 +3,10 @@
 -- School: Little Stars Academy (CBSE)
 -- Locations: BELLANDUR + HSR LAYOUT
 -- Logins:
---   location_admin : admin@demo.com     / demo1234
---   teacher        : teacher@demo.com   / demo1234
---   parent         : parent@demo.com    / demo1234
+--   school_admin   : schooladmin@demo.com / demo1234
+--   location_admin : admin@demo.com      / demo1234
+--   teacher        : teacher@demo.com    / demo1234
+--   parent         : parent@demo.com     / demo1234
 -- ============================================================
 
 SET FOREIGN_KEY_CHECKS = 0;
@@ -87,11 +88,12 @@ VALUES
 -- $2b$10$K7L/5GzL6JHm/nVOmcGKWubNAKwkNmXrGMaQTekCX.kLr9fFrz7Oa  (demo1234)
 INSERT INTO users (id, school_id, location_id, email, password_hash, first_name, last_name, phone, role, status, email_confirmed)
 VALUES
-  (1, 1, 1, 'admin@demo.com',   '$2b$10$K7L/5GzL6JHm/nVOmcGKWubNAKwkNmXrGMaQTekCX.kLr9fFrz7Oa', 'Priya',  'Sharma',  '+919811111111', 'location_admin', 'active', 1),
-  (2, 1, 1, 'teacher@demo.com', '$2b$10$K7L/5GzL6JHm/nVOmcGKWubNAKwkNmXrGMaQTekCX.kLr9fFrz7Oa', 'Neha',   'Verma',   '+919822222222', 'teacher',        'active', 1),
-  (3, 1, 1, 'parent@demo.com',  '$2b$10$K7L/5GzL6JHm/nVOmcGKWubNAKwkNmXrGMaQTekCX.kLr9fFrz7Oa', 'Rajesh', 'Kapoor',  '+919833333333', 'parent',         'active', 1),
-  (4, 1, 2, 'admin2@demo.com',  '$2b$10$K7L/5GzL6JHm/nVOmcGKWubNAKwkNmXrGMaQTekCX.kLr9fFrz7Oa', 'Anita',  'Reddy',   '+919844444444', 'location_admin', 'active', 1),
-  (5, 1, 1, 'teacher2@demo.com','$2b$10$K7L/5GzL6JHm/nVOmcGKWubNAKwkNmXrGMaQTekCX.kLr9fFrz7Oa', 'Suresh', 'Kumar',   '+919855555555', 'teacher',        'active', 1);
+  (1, 1, 1, 'admin@demo.com',        '$2b$10$K7L/5GzL6JHm/nVOmcGKWubNAKwkNmXrGMaQTekCX.kLr9fFrz7Oa', 'Priya',  'Sharma',  '+919811111111', 'location_admin', 'active', 1),
+  (2, 1, 1, 'teacher@demo.com',     '$2b$10$K7L/5GzL6JHm/nVOmcGKWubNAKwkNmXrGMaQTekCX.kLr9fFrz7Oa', 'Neha',   'Verma',   '+919822222222', 'teacher',        'active', 1),
+  (3, 1, 1, 'parent@demo.com',      '$2b$10$K7L/5GzL6JHm/nVOmcGKWubNAKwkNmXrGMaQTekCX.kLr9fFrz7Oa', 'Rajesh', 'Kapoor',  '+919833333333', 'parent',         'active', 1),
+  (4, 1, 2, 'admin2@demo.com',      '$2b$10$K7L/5GzL6JHm/nVOmcGKWubNAKwkNmXrGMaQTekCX.kLr9fFrz7Oa', 'Anita',  'Reddy',   '+919844444444', 'location_admin', 'active', 1),
+  (5, 1, 1, 'teacher2@demo.com',    '$2b$10$K7L/5GzL6JHm/nVOmcGKWubNAKwkNmXrGMaQTekCX.kLr9fFrz7Oa', 'Suresh', 'Kumar',   '+919855555555', 'teacher',        'active', 1),
+  (7, 1, NULL,'schooladmin@demo.com','$2b$10$K7L/5GzL6JHm/nVOmcGKWubNAKwkNmXrGMaQTekCX.kLr9fFrz7Oa', 'Rahul',  'Mehta',   '+919866666666', 'school_admin',   'active', 1);
 
 -- ── Staff ─────────────────────────────────────────────────────
 INSERT INTO staff (id, school_id, location_id, user_id, first_name, last_name, email, phone, role, join_date, salary, status, background_check_status)
