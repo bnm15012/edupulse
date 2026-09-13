@@ -30,129 +30,156 @@ type Student = { id: number; firstName: string; lastName: string };
 const inputCls = "w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm transition";
 
 // ─── Consolidated report card — one student, all exams for the year ──────────
+function ReportCardPage({ report, exam }: { report: any; exam: any }) {
+  const addressLine = [report.schoolAddress, report.schoolCity, report.schoolState].filter(Boolean).join(", ");
+  return (
+    <div className="bg-white print:shadow-none" style={{ minHeight: "297mm", padding: "12mm 14mm", boxSizing: "border-box" }}>
+
+      {/* ── Letterhead ── */}
+      <div className="flex items-start justify-between pb-4 mb-4 border-b-2 border-slate-800">
+        <div className="flex items-center gap-4">
+          {report.schoolLogoUrl ? (
+            <img src={report.schoolLogoUrl} alt="logo" className="h-16 w-16 object-contain rounded-lg border border-slate-200 bg-white p-1 shrink-0" />
+          ) : (
+            <div className="h-16 w-16 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center shrink-0">
+              <GraduationCap className="w-8 h-8 text-blue-400" />
+            </div>
+          )}
+          <div>
+            <h1 className="text-xl font-extrabold text-slate-900 leading-tight">{report.schoolName}</h1>
+            {addressLine && <p className="text-xs text-slate-500 mt-0.5">{addressLine}</p>}
+            <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+              {report.schoolPhone && <span className="text-xs text-slate-400">{report.schoolPhone}</span>}
+              {report.schoolEmail && <span className="text-xs text-slate-400">{report.schoolEmail}</span>}
+            </div>
+          </div>
+        </div>
+        <div className="text-right shrink-0">
+          <p className="text-sm font-bold text-slate-700 uppercase tracking-wide">Grade Card</p>
+          <p className="text-xs text-slate-500 mt-0.5">{report.academicYear}</p>
+          <span className="inline-block mt-1 px-2 py-0.5 text-xs font-bold uppercase rounded bg-blue-100 text-blue-700">{report.board}</span>
+        </div>
+      </div>
+
+      {/* ── Student / Exam info row ── */}
+      <div className="grid grid-cols-3 gap-4 mb-6 p-3 bg-slate-50 rounded-xl border border-slate-200">
+        <div>
+          <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-0.5">Student Name</p>
+          <p className="text-base font-extrabold text-slate-800">{report.student.firstName} {report.student.lastName}</p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-0.5">Class</p>
+          <p className="text-base font-bold text-slate-700">{report.className}</p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold mb-0.5">Examination</p>
+          <p className="text-base font-bold text-slate-700">{exam.term}</p>
+          {exam.startDate && <p className="text-xs text-slate-400">{fmtDate(exam.startDate)}</p>}
+        </div>
+      </div>
+
+      {/* ── Subject cards grid ── */}
+      {exam.hasMarks ? (
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          {exam.subjects.map((s: any, i: number) => (
+            <div key={i} className="rounded-xl border-2 border-slate-200 p-4 flex flex-col gap-2 bg-white">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">{s.subjectName}</p>
+              <div className="flex items-end justify-between mt-1">
+                <div>
+                  <p className="text-3xl font-extrabold text-slate-800 leading-none">{s.marks ?? "—"}</p>
+                  <p className="text-xs text-slate-400 mt-1">out of {s.maxMarks}</p>
+                </div>
+                <div className="text-right">
+                  <p className={`text-2xl font-extrabold ${s.grade ? "text-blue-600" : "text-slate-300"}`}>{s.grade ?? "—"}</p>
+                  {s.percentage && <p className="text-xs text-slate-500">{s.percentage}%</p>}
+                  {s.gradePoint && <p className="text-xs text-slate-400">{s.gradePoint} GP</p>}
+                </div>
+              </div>
+              {s.marks === null && (
+                <p className="text-[10px] text-amber-600 bg-amber-50 rounded px-1.5 py-0.5 self-start">Marks not entered</p>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mb-6 p-8 text-center bg-amber-50 rounded-xl border border-amber-200">
+          <p className="text-sm text-amber-700 font-semibold">Results awaited — marks not yet entered</p>
+        </div>
+      )}
+
+      {/* ── Term result summary bar ── */}
+      {exam.hasMarks && (
+        <div className="flex items-center justify-between bg-slate-900 text-white rounded-xl px-6 py-4">
+          <div>
+            <p className="text-xs text-slate-400 uppercase tracking-wide">Overall — {exam.term}</p>
+            <p className="text-sm font-bold mt-0.5">{report.student.firstName} {report.student.lastName} · {report.className}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-3xl font-extrabold">{exam.termPercentage}%</p>
+            <p className="text-sm text-slate-400">Grade: <span className="font-bold text-white">{exam.termGrade ?? "—"}</span>{exam.termGradePoint ? ` · ${exam.termGradePoint} GP` : ""}</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ConsolidatedReportCard({ report, onClose }: { report: any; onClose?: () => void }) {
   if (!report) return null;
 
   const handlePrint = () => window.print();
-
   const handleDownload = () => {
-    // Open print dialog with destination hint for PDF save
     const style = document.createElement("style");
     style.id = "__rc_dl_hint";
-    style.textContent = `@page { size: A4; margin: 15mm; }`;
+    style.textContent = `@page { size: A4 portrait; margin: 0; }`;
     document.head.appendChild(style);
     window.print();
     setTimeout(() => document.getElementById("__rc_dl_hint")?.remove(), 1000);
   };
 
-  const addressLine = [report.schoolAddress, report.schoolCity, report.schoolState].filter(Boolean).join(", ");
-
   return (
     <div className="border border-slate-200 rounded-2xl bg-white overflow-hidden print:border-0 print:rounded-none print:shadow-none">
 
-      {/* ── School letterhead ── */}
-      <div className="flex items-center gap-5 px-8 pt-8 pb-5 border-b border-slate-200 print:pb-4">
-        {report.schoolLogoUrl && (
-          <img src={report.schoolLogoUrl} alt="School logo" className="h-16 w-16 object-contain rounded-xl border border-slate-100 bg-white p-1 shrink-0" />
-        )}
-        <div className="flex-1 min-w-0">
-          <h1 className="text-lg font-extrabold text-slate-900 leading-tight">{report.schoolName}</h1>
-          {addressLine && <p className="text-xs text-slate-500 mt-0.5">{addressLine}</p>}
-          <div className="flex items-center gap-3 mt-1 flex-wrap">
-            {report.schoolPhone && <span className="text-xs text-slate-400">{report.schoolPhone}</span>}
-            {report.schoolEmail && <span className="text-xs text-slate-400">{report.schoolEmail}</span>}
-          </div>
+      {/* Screen close button */}
+      {onClose && (
+        <div className="flex items-center justify-between px-6 py-3 border-b border-slate-100 print:hidden">
+          <p className="text-sm font-semibold text-slate-600">
+            {report.student.firstName} {report.student.lastName} · {report.className} · {report.academicYear}
+          </p>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X className="w-4 h-4" /></button>
         </div>
-        <div className="text-right shrink-0">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Academic Report Card</p>
-          <span className="inline-block mt-1 px-2.5 py-0.5 text-xs font-bold uppercase rounded-full bg-blue-100 text-blue-700">{report.board}</span>
-          <p className="text-xs text-slate-500 mt-1">{report.academicYear}</p>
+      )}
+
+      {/* One page per exam term */}
+      {report.exams.map((exam: any, idx: number) => (
+        <div key={exam.examId} className={idx > 0 ? "print:break-before-page border-t-4 border-dashed border-slate-200 print:border-0" : ""}>
+          <ReportCardPage report={report} exam={exam} />
         </div>
-        {onClose && (
-          <button onClick={onClose} className="ml-2 p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 print:hidden self-start"><X className="w-4 h-4" /></button>
-        )}
-      </div>
+      ))}
 
-      {/* ── Student info ── */}
-      <div className="mx-8 mt-5 mb-5 p-4 bg-slate-50 rounded-xl border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-        <div><p className="text-xs text-slate-400">Student</p><p className="font-bold text-slate-800">{report.student.firstName} {report.student.lastName}</p></div>
-        <div><p className="text-xs text-slate-400">Class</p><p className="font-semibold text-slate-700">{report.className}</p></div>
-        <div><p className="text-xs text-slate-400">Academic Year</p><p className="font-semibold text-slate-700">{report.academicYear}</p></div>
-        <div><p className="text-xs text-slate-400">Board</p><p className="font-semibold text-slate-700">{report.board?.toUpperCase()}</p></div>
-      </div>
-
-      {/* ── One section per exam ── */}
-      <div className="px-8 space-y-5 pb-4">
-        {report.exams.map((exam: any) => (
-          <div key={exam.examId} className="rounded-xl border border-slate-200 overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-b border-slate-200">
-              <div>
-                <p className="text-sm font-bold text-slate-800">{exam.term}</p>
-                <p className="text-xs text-slate-400 capitalize">{exam.examType}{exam.startDate ? ` · ${fmtDate(exam.startDate)}` : ""}</p>
-              </div>
-              {exam.hasMarks ? (
-                <div className="text-right">
-                  <p className="text-sm font-bold text-blue-700">{exam.termPercentage}%</p>
-                  <p className="text-xs text-slate-500">Grade: <span className="font-bold">{exam.termGrade ?? "—"}</span>{exam.termGradePoint ? ` · ${exam.termGradePoint} GP` : ""}</p>
-                </div>
-              ) : (
-                <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">Results awaited</span>
-              )}
-            </div>
-            <table className="w-full text-sm">
-              <thead className="bg-white border-b border-slate-100">
-                <tr>
-                  <th className="text-left px-4 py-2 text-xs font-semibold text-slate-500">Subject</th>
-                  <th className="px-3 py-2 text-xs font-semibold text-slate-500 text-center">Max</th>
-                  <th className="px-3 py-2 text-xs font-semibold text-slate-500 text-center">Scored</th>
-                  <th className="px-3 py-2 text-xs font-semibold text-slate-500 text-center">%</th>
-                  <th className="px-3 py-2 text-xs font-semibold text-slate-500 text-center">Grade</th>
-                  <th className="px-3 py-2 text-xs font-semibold text-slate-500 text-center">GP</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {exam.subjects.map((s: any, i: number) => (
-                  <tr key={i} className="hover:bg-slate-50 transition">
-                    <td className="px-4 py-2 font-medium text-slate-700">{s.subjectName}</td>
-                    <td className="px-3 py-2 text-center text-slate-500">{s.maxMarks}</td>
-                    <td className="px-3 py-2 text-center font-semibold text-slate-800">{s.marks ?? "—"}</td>
-                    <td className="px-3 py-2 text-center text-slate-600">{s.percentage ? `${s.percentage}%` : "—"}</td>
-                    <td className="px-3 py-2 text-center font-bold text-blue-700">{s.grade ?? "—"}</td>
-                    <td className="px-3 py-2 text-center text-slate-500">{s.gradePoint ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ))}
-      </div>
-
-      {/* ── Overall summary ── */}
+      {/* Overall summary page */}
       {report.overallPercentage && (
-        <div className="mx-8 mb-6 flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-6 py-4">
-          <div>
-            <p className="text-sm font-bold text-blue-800">Overall Result — {report.academicYear}</p>
-            <p className="text-xs text-blue-600">{report.className} · {report.board}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-2xl font-extrabold text-blue-700">{report.overallPercentage}%</p>
-            <p className="text-xs text-blue-600 font-semibold">Grade: {report.overallGrade ?? "—"}{report.overallGradePoint ? ` (${report.overallGradePoint} GP)` : ""}</p>
+        <div className="print:break-before-page border-t-4 border-dashed border-slate-200 print:border-0 bg-white" style={{ minHeight: "40mm", padding: "12mm 14mm" }}>
+          <div className="flex items-center justify-between bg-blue-600 text-white rounded-2xl px-8 py-6">
+            <div>
+              <p className="text-sm font-bold text-blue-200 uppercase tracking-wide">Annual Result — {report.academicYear}</p>
+              <p className="text-xl font-extrabold mt-1">{report.student.firstName} {report.student.lastName}</p>
+              <p className="text-sm text-blue-200">{report.className} · {report.board}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-5xl font-extrabold">{report.overallPercentage}%</p>
+              <p className="text-sm text-blue-200 mt-1">Grade: <span className="font-extrabold text-white text-lg">{report.overallGrade ?? "—"}</span>{report.overallGradePoint ? ` · ${report.overallGradePoint} GP` : ""}</p>
+            </div>
           </div>
         </div>
       )}
 
-      {/* ── Actions ── */}
-      <div className="px-8 pb-8 flex items-center gap-3 print:hidden">
-        <button
-          onClick={handlePrint}
-          className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg transition"
-        >
+      {/* Actions */}
+      <div className="px-6 py-4 flex items-center gap-3 border-t border-slate-100 print:hidden">
+        <button onClick={handlePrint} className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg transition">
           <Printer className="w-4 h-4" /> Print
         </button>
-        <button
-          onClick={handleDownload}
-          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition"
-        >
+        <button onClick={handleDownload} className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition">
           <Download className="w-4 h-4" /> Download PDF
         </button>
       </div>
