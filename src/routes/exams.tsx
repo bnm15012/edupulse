@@ -663,7 +663,7 @@ function ExamsPage() {
                         const incomplete = list.filter((s: any) =>
                           s.exams?.some((e: any) => e.hasMarks && e.subjects?.some((sub: any) => sub.marks === null))
                         );
-                        if (incomplete.length > 0) {
+                        if (incomplete.length > 0 && isAdmin) {
                           toast(`⚠️ ${incomplete.length} of ${list.length} students have incomplete marks — report cards generated with gaps`, "error");
                         } else {
                           toast(`${list.length} report cards generated`, "success");
@@ -703,13 +703,13 @@ function ExamsPage() {
                     const missingCount = rc.exams?.reduce((acc: number, e: any) =>
                       acc + (e.hasMarks ? (e.subjects?.filter((s: any) => s.marks === null).length ?? 0) : 0), 0) ?? 0;
                     return (
-                      <div key={i} className={`flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition ${missingCount > 0 ? "bg-amber-50/50" : ""}`}>
+                      <div key={i} className={`flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition ${missingCount > 0 && isAdmin ? "bg-amber-50/50" : ""}`}>
                         <div className="flex items-center gap-3">
                           <span className="text-xs text-slate-400 w-6 shrink-0">{i + 1}</span>
                           <div>
                             <div className="flex items-center gap-2">
                               <p className="text-sm font-semibold text-slate-800">{rc.student?.firstName} {rc.student?.lastName}</p>
-                              {missingCount > 0 && (
+                              {missingCount > 0 && isAdmin && (
                                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
                                   {missingCount} missing
                                 </span>
@@ -789,7 +789,7 @@ function ExamsPage() {
                       ? e.subjects?.filter((s: any) => s.marks === null).map((s: any) => `${s.subjectName} (${e.term})`)
                       : []
                   ) ?? [];
-                  if (missingSubjects.length > 0) {
+                  if (missingSubjects.length > 0 && isAdmin) {
                     toast(`⚠️ Marks missing for: ${missingSubjects.slice(0, 3).join(", ")}${missingSubjects.length > 3 ? ` +${missingSubjects.length - 3} more` : ""}`, "error");
                   }
                   // Admin: mark as issued so parent can see it was generated
