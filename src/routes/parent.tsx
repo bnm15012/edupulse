@@ -1,7 +1,7 @@
 import { createFileRoute, useSearch, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { getParentPortal, updateChildPersonal, updateParentContact, getCurriculumActivities, createRazorpayOrder, verifyRazorpayPayment, getStudentAttendanceSummary, listReportCards, listSchoolAnnouncements, getStudentAcademicReport } from "@/lib/auth";
+import { getParentPortal, updateChildPersonal, updateParentContact, getCurriculumActivities, createRazorpayOrder, verifyRazorpayPayment, getStudentAttendanceSummary, listReportCards, listSchoolAnnouncements, getStudentAcademicReport, getStudentAllYearsReport } from "@/lib/auth";
 import { Users, DollarSign, AlertCircle, CheckCircle2, Clock, CreditCard, BookOpen, Calendar, X, Image, Loader2, BarChart2, GraduationCap, ExternalLink, Megaphone, HeartPulse, ChevronDown } from "lucide-react";
 import { fmtDate, fmtDateTime } from "@/lib/utils";
 
@@ -94,6 +94,7 @@ function ParentPortal() {
   const getAttendanceFn        = useServerFn(getStudentAttendanceSummary);
   const listReportCardsFn      = useServerFn(listReportCards);
   const getAcademicReportFn    = useServerFn(getStudentAcademicReport);
+  const getAllYearsReportFn     = useServerFn(getStudentAllYearsReport);
 
   const listAnnouncementsFn = useServerFn(listSchoolAnnouncements);
 
@@ -129,6 +130,7 @@ function ParentPortal() {
   }, [attendanceSummary]);
   const [reportCardsList, setReportCardsList] = useState<any[]>([]);
   const [academicReport, setAcademicReport] = useState<any | null>(null);
+  const [allYearsReports, setAllYearsReports] = useState<any[]>([]);
 
   const [announcementsList, setAnnouncementsList] = useState<any[]>([]);
   const [academicLoading, setAcademicLoading] = useState(false);
@@ -256,21 +258,19 @@ function ParentPortal() {
     const childId = child.id;
     setAcademicLoading(true);
     setAttendanceSummary([]); setReportCardsList([]); setAnnouncementsList([]); setAcademicReport(null);
-
-    // Use the academic year from the child's current class; fall back to date-derived year
-    const now = new Date();
-    const yr = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
-    const currentAcademicYear = child.classAcademicYear ?? `${yr}-${String(yr + 1).slice(2)}`;
+    setAllYearsReports([]); setExpandedYear(null);
 
     Promise.all([
       getAttendanceFn({ data: { studentId: childId } }).then((d) => setAttendanceSummary(d as any[])).catch(() => {}),
       listReportCardsFn({ data: { studentId: childId } }).then((d) => setReportCardsList(d as any[])).catch(() => {}),
       listAnnouncementsFn({ data: { target: "parents" } }).then((d) => setAnnouncementsList(d as any[])).catch(() => {}),
-      // Load academic marks if child has a current class
-      child.currentClassId
-        ? getAcademicReportFn({ data: { studentId: childId, classId: child.currentClassId, academicYear: currentAcademicYear } })
-            .then((d) => setAcademicReport(d)).catch(() => {})
-        : Promise.resolve(),
+      getAllYearsReportFn({ data: { studentId: childId } })
+        .then((reports: any) => {
+          const list = (reports ?? []) as any[];
+          setAllYearsReports(list);
+          // Auto-expand the most recent year
+          if (list.length > 0) setExpandedYear(list[0].academicYear);
+        }).catch(() => {}),
     ]).finally(() => setAcademicLoading(false));
   }, [activeChild, data?.children.length]);
 
@@ -733,85 +733,108 @@ function ParentPortal() {
 
           {activeTab === "academics" && (<>
 
-          {/* Marks & Results — inline per exam */}
+          {/* Marks & Results — year accordion */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="flex items-center gap-2 px-6 py-4 border-b border-slate-100">
               <div className="w-1 h-5 bg-blue-600 rounded-full" />
               <BarChart2 className="w-4 h-4 text-blue-600" />
               <h2 className="text-sm font-bold text-slate-800">Marks & Results</h2>
-              {academicReport && (
-                <span className="ml-auto text-xs text-slate-400">{academicReport.academicYear} · {academicReport.className}</span>
-              )}
             </div>
             {academicLoading ? (
-              <div className="p-6 space-y-3">{[1,2,3].map(i=><div key={i} className="h-24 bg-slate-100 rounded-xl animate-pulse"/>)}</div>
-            ) : !academicReport || academicReport.exams.length === 0 ? (
+              <div className="p-6 space-y-3">{[1,2,3].map(i=><div key={i} className="h-16 bg-slate-100 rounded-xl animate-pulse"/>)}</div>
+            ) : allYearsReports.length === 0 ? (
               <div className="p-8 text-center">
                 <GraduationCap className="w-8 h-8 mx-auto mb-2 text-slate-200" />
-                <p className="text-sm text-slate-400">No exam results available yet for the current academic year.</p>
+                <p className="text-sm text-slate-400">No exam results available yet.</p>
               </div>
             ) : (
-              <div className="p-6 space-y-5">
-                {academicReport.exams.map((exam: any) => (
-                  <div key={exam.examId} className="rounded-xl border border-slate-200 overflow-hidden">
-                    {/* Exam header */}
-                    <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-b border-slate-200">
-                      <div>
-                        <p className="text-sm font-bold text-slate-800">{exam.term}</p>
-                        <p className="text-xs text-slate-400 capitalize">{exam.examType}{exam.startDate ? ` · ${fmtDate(exam.startDate)}` : ""}</p>
-                      </div>
-                      {exam.hasMarks && (
-                        <div className="text-right">
-                          <p className="text-sm font-bold text-blue-700">{exam.termPercentage}%</p>
-                          <p className="text-xs text-slate-500">Grade: <span className="font-bold">{exam.termGrade ?? "—"}</span></p>
+              <div className="divide-y divide-slate-100">
+                {allYearsReports.map((report: any) => {
+                  const isOpen = expandedYear === report.academicYear;
+                  return (
+                    <div key={report.academicYear}>
+                      {/* Year accordion header */}
+                      <button
+                        onClick={() => setExpandedYear(isOpen ? null : report.academicYear)}
+                        className="w-full flex items-center justify-between px-6 py-4 hover:bg-slate-50 transition text-left"
+                      >
+                        <div className="flex items-center gap-3">
+                          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? "rotate-0" : "-rotate-90"}`} />
+                          <div>
+                            <p className="text-sm font-bold text-slate-800">{report.academicYear}</p>
+                            <p className="text-xs text-slate-400">{report.className}</p>
+                          </div>
+                        </div>
+                        {report.overallPercentage && (
+                          <div className="text-right">
+                            <p className="text-sm font-bold text-blue-700">{report.overallPercentage}%</p>
+                            <p className="text-xs text-slate-500">Overall · {report.overallGrade ?? "—"}</p>
+                          </div>
+                        )}
+                      </button>
+
+                      {/* Year content — exams */}
+                      {isOpen && (
+                        <div className="px-6 pb-6 space-y-4 bg-slate-50/50">
+                          {report.exams.map((exam: any) => (
+                            <div key={exam.examId} className="rounded-xl border border-slate-200 overflow-hidden bg-white">
+                              <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-b border-slate-200">
+                                <div>
+                                  <p className="text-sm font-bold text-slate-800">{exam.term}</p>
+                                  <p className="text-xs text-slate-400 capitalize">{exam.examType}{exam.startDate ? ` · ${fmtDate(exam.startDate)}` : ""}</p>
+                                </div>
+                                {exam.hasMarks ? (
+                                  <div className="text-right">
+                                    <p className="text-sm font-bold text-blue-700">{exam.termPercentage}%</p>
+                                    <p className="text-xs text-slate-500">Grade: <span className="font-bold">{exam.termGrade ?? "—"}</span></p>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">Results awaited</span>
+                                )}
+                              </div>
+                              {exam.subjects.length > 0 && (
+                                <table className="w-full text-xs">
+                                  <thead>
+                                    <tr className="border-b border-slate-100">
+                                      <th className="text-left px-4 py-2 text-slate-500 font-semibold">Subject</th>
+                                      <th className="px-3 py-2 text-slate-500 font-semibold text-center">Max</th>
+                                      <th className="px-3 py-2 text-slate-500 font-semibold text-center">Scored</th>
+                                      <th className="px-3 py-2 text-slate-500 font-semibold text-center">%</th>
+                                      <th className="px-3 py-2 text-slate-500 font-semibold text-center">Grade</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-50">
+                                    {exam.subjects.map((s: any, i: number) => (
+                                      <tr key={i} className="hover:bg-slate-50 transition">
+                                        <td className="px-4 py-2 font-medium text-slate-700">{s.subjectName}</td>
+                                        <td className="px-3 py-2 text-center text-slate-500">{s.maxMarks}</td>
+                                        <td className="px-3 py-2 text-center font-semibold text-slate-800">{s.marks ?? "—"}</td>
+                                        <td className="px-3 py-2 text-center text-slate-600">{s.percentage ? `${s.percentage}%` : "—"}</td>
+                                        <td className="px-3 py-2 text-center">
+                                          {s.grade ? <span className="font-bold text-blue-700">{s.grade}</span> : <span className="text-slate-300">—</span>}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              )}
+                            </div>
+                          ))}
+                          {/* Overall for this year */}
+                          {report.overallPercentage && (
+                            <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-5 py-3">
+                              <p className="text-sm font-bold text-blue-800">Overall ({report.academicYear})</p>
+                              <div className="text-right">
+                                <p className="text-lg font-extrabold text-blue-700">{report.overallPercentage}%</p>
+                                <p className="text-xs text-blue-600">Grade: <span className="font-bold">{report.overallGrade ?? "—"}</span></p>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
-                      {!exam.hasMarks && (
-                        <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">Results awaited</span>
-                      )}
                     </div>
-                    {/* Subject rows */}
-                    {exam.subjects.length > 0 && (
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="border-b border-slate-100">
-                            <th className="text-left px-4 py-2 text-slate-500 font-semibold">Subject</th>
-                            <th className="px-3 py-2 text-slate-500 font-semibold text-center">Max</th>
-                            <th className="px-3 py-2 text-slate-500 font-semibold text-center">Scored</th>
-                            <th className="px-3 py-2 text-slate-500 font-semibold text-center">%</th>
-                            <th className="px-3 py-2 text-slate-500 font-semibold text-center">Grade</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-50">
-                          {exam.subjects.map((s: any, i: number) => (
-                            <tr key={i} className="hover:bg-slate-50 transition">
-                              <td className="px-4 py-2 font-medium text-slate-700">{s.subjectName}</td>
-                              <td className="px-3 py-2 text-center text-slate-500">{s.maxMarks}</td>
-                              <td className="px-3 py-2 text-center font-semibold text-slate-800">{s.marks ?? "—"}</td>
-                              <td className="px-3 py-2 text-center text-slate-600">{s.percentage ? `${s.percentage}%` : "—"}</td>
-                              <td className="px-3 py-2 text-center">
-                                {s.grade ? (
-                                  <span className="font-bold text-blue-700">{s.grade}</span>
-                                ) : <span className="text-slate-300">—</span>}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                ))}
-
-                {/* Overall summary */}
-                {academicReport.overallPercentage && (
-                  <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-5 py-3">
-                    <p className="text-sm font-bold text-blue-800">Overall ({academicReport.academicYear})</p>
-                    <div className="text-right">
-                      <p className="text-lg font-extrabold text-blue-700">{academicReport.overallPercentage}%</p>
-                      <p className="text-xs text-blue-600">Grade: <span className="font-bold">{academicReport.overallGrade ?? "—"}</span></p>
-                    </div>
-                  </div>
-                )}
+                  );
+                })}
               </div>
             )}
           </div>

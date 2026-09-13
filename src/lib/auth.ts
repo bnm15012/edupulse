@@ -7221,6 +7221,72 @@ export const getStudentAcademicReport = createServerFn({ method: "GET" })
     };
   });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ALL-YEARS ACADEMIC REPORT for a student (parent portal)
+// Returns one report per academic year the student has exams in, newest first
+// ─────────────────────────────────────────────────────────────────────────────
+
+const studentAllYearsReportSchema = z.object({ studentId: z.number() });
+
+export const getStudentAllYearsReport = createServerFn({ method: "GET" })
+  .validator((i: unknown) => studentAllYearsReportSchema.parse(i))
+  .handler(async ({ data }) => {
+    await requireSession();
+    const { db } = await import("@/lib/db");
+    const { students, exams, classEnrollments, classes } = await import("@/lib/db/schema");
+
+    const [student] = await db.select({ id: students.id, schoolId: students.schoolId, currentClassId: students.currentClassId })
+      .from(students).where(eq(students.id, data.studentId)).limit(1);
+    if (!student) throw new Error("Student not found");
+
+    // Find all unique (classId, academicYear) combos the student has exams in
+    const enrollments = await db.select({
+      classId: classEnrollments.classId,
+      academicYear: classEnrollments.academicYear,
+      className: classes.name,
+    }).from(classEnrollments)
+      .innerJoin(classes, eq(classEnrollments.classId, classes.id))
+      .where(eq(classEnrollments.studentId, data.studentId));
+
+    // Also find years from exams directly (in case enrollment year is empty)
+    const examYears = await db.selectDistinct({ classId: exams.classId, academicYear: exams.academicYear })
+      .from(exams)
+      .where(eq(exams.schoolId, student.schoolId));
+
+    // Build unique (classId, year) set — prefer enrollment data, supplement with exam data
+    const yearSet = new Map<string, { classId: number; academicYear: string; className: string }>();
+    for (const en of enrollments) {
+      if (!en.academicYear) continue;
+      const key = `${en.classId}-${en.academicYear}`;
+      yearSet.set(key, { classId: en.classId, academicYear: en.academicYear, className: en.className ?? "" });
+    }
+    // For current class, also check exams directly
+    if (student.currentClassId) {
+      for (const ey of examYears) {
+        if (ey.classId !== student.currentClassId) continue;
+        const key = `${ey.classId}-${ey.academicYear}`;
+        if (!yearSet.has(key)) {
+          const [cls] = await db.select({ name: classes.name }).from(classes).where(eq(classes.id, ey.classId)).limit(1);
+          yearSet.set(key, { classId: ey.classId, academicYear: ey.academicYear, className: cls?.name ?? "" });
+        }
+      }
+    }
+
+    // Sort newest year first
+    const sorted = [...yearSet.values()].sort((a, b) => b.academicYear.localeCompare(a.academicYear));
+    if (sorted.length === 0) return [];
+
+    // Fetch report for each year
+    const reports = await Promise.all(
+      sorted.map(({ classId, academicYear }) =>
+        getStudentAcademicReport({ data: { studentId: data.studentId, classId, academicYear } })
+          .catch(() => null)
+      )
+    );
+
+    return reports.filter(Boolean);
+  });
+
 // Same but for all students in the class (admin bulk)
 const consolidatedClassReportSchema = z.object({
   classId: z.number(),
