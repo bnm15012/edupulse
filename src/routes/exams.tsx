@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
   ClipboardList, FileText, Plus, X, Pencil, Trash2, Save, Printer,
-  AlertCircle, Loader2, CheckCircle2, Download, Users,
+  AlertCircle, Loader2, CheckCircle2, Download, Users, GraduationCap,
 } from "lucide-react";
 import {
   manageExam, listExams, deleteExam,
