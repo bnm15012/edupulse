@@ -39,60 +39,52 @@ function ConsolidatedReportCard({ report, onClose }: { report: any; onClose?: ()
 
   const handlePrint = () => window.print();
 
-  const handleDownload = useCallback(() => {
+  const handleDownload = useCallback(async () => {
     if (!pdfRef.current) return;
     setPdfLoading(true);
-
-    // Collect all computed styles from the page's stylesheets as plain text,
-    // then open a new window with the report HTML + those styles + an @page A4 rule,
-    // and trigger print — the browser's built-in PDF renderer handles oklch fine.
     try {
       const el = pdfRef.current;
 
-      // Gather all stylesheet rules as text (skipping cross-origin sheets)
-      let cssText = "@page { size: A4 portrait; margin: 10mm 12mm; }\n";
-      cssText += "body { margin: 0; padding: 0; background: white; }\n";
+      // Collect all stylesheet rules as plain CSS text
+      let cssText = "body { margin: 0; padding: 0; background: white; font-family: sans-serif; }\n";
       Array.from(document.styleSheets).forEach((sheet) => {
         try {
           Array.from(sheet.cssRules ?? []).forEach((rule) => {
             cssText += rule.cssText + "\n";
           });
-        } catch { /* cross-origin sheet — skip */ }
+        } catch { /* cross-origin — skip */ }
       });
 
-      const studentName = `${report.student.firstName} ${report.student.lastName}`;
-      const win = window.open("", "_blank", "width=900,height=1200");
-      if (!win) { setPdfLoading(false); return; }
-
-      win.document.write(`<!DOCTYPE html>
+      const studentName = `${report.student.firstName}_${report.student.lastName}`;
+      const html = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8"/>
   <title>ReportCard_${studentName}_${report.academicYear}</title>
   <style>${cssText}</style>
 </head>
-<body>${el.outerHTML}</body>
-</html>`);
-      win.document.close();
+<body style="padding:0;margin:0;">${el.outerHTML}</body>
+</html>`;
 
-      // Wait for fonts/images then print
-      win.onload = () => {
-        setTimeout(() => {
-          win.focus();
-          win.print();
-          setPdfLoading(false);
-        }, 800);
-      };
-      // Fallback if onload already fired
-      setTimeout(() => {
-        if (!win.closed) {
-          win.focus();
-          win.print();
-        }
-        setPdfLoading(false);
-      }, 2000);
+      const res = await fetch("/api/report-card-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html }),
+      });
+
+      if (!res.ok) throw new Error(await res.text());
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `ReportCard_${studentName}_${report.academicYear}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
     } catch (e) {
       console.error("PDF generation failed", e);
+    } finally {
       setPdfLoading(false);
     }
   }, [report]);
