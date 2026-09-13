@@ -658,9 +658,10 @@ function ExamsPage() {
                       setClassReport(list);
                       if (!list.length) toast("No enrolled students found in this class", "error");
                       else {
-                        // Count students with incomplete marks (any subject missing marks in any exam)
+                        // Count students with incomplete marks — only flag exams that have SOME marks entered but are missing subjects
+                        // (ignore exams where no marks have been entered at all — those haven't happened yet)
                         const incomplete = list.filter((s: any) =>
-                          s.exams?.some((e: any) => e.subjects?.some((sub: any) => sub.marks === null))
+                          s.exams?.some((e: any) => e.hasMarks && e.subjects?.some((sub: any) => sub.marks === null))
                         );
                         if (incomplete.length > 0) {
                           toast(`⚠️ ${incomplete.length} of ${list.length} students have incomplete marks — report cards generated with gaps`, "error");
@@ -698,8 +699,9 @@ function ExamsPage() {
                 <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
                   {classReport.map((rc: any, i: number) => {
                     const hasAnyMarks = rc.exams?.some((e: any) => e.hasMarks);
+                    // Only count missing subjects on exams that have started (hasMarks = true)
                     const missingCount = rc.exams?.reduce((acc: number, e: any) =>
-                      acc + (e.subjects?.filter((s: any) => s.marks === null).length ?? 0), 0) ?? 0;
+                      acc + (e.hasMarks ? (e.subjects?.filter((s: any) => s.marks === null).length ?? 0) : 0), 0) ?? 0;
                     return (
                       <div key={i} className={`flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition ${missingCount > 0 ? "bg-amber-50/50" : ""}`}>
                         <div className="flex items-center gap-3">
@@ -781,9 +783,11 @@ function ExamsPage() {
                 try {
                   const d = await getStudentReportFn({ data: { studentId: Number(rcStudent), classId: rcClass, academicYear: rcYear } }) as any;
                   setSingleReport(d);
-                  // Warn if any subject marks are missing
+                  // Warn only for exams that have SOME marks but are incomplete (not exams that haven't started yet)
                   const missingSubjects = d?.exams?.flatMap((e: any) =>
-                    e.subjects?.filter((s: any) => s.marks === null).map((s: any) => `${s.subjectName} (${e.term})`)
+                    e.hasMarks
+                      ? e.subjects?.filter((s: any) => s.marks === null).map((s: any) => `${s.subjectName} (${e.term})`)
+                      : []
                   ) ?? [];
                   if (missingSubjects.length > 0) {
                     toast(`⚠️ Marks missing for: ${missingSubjects.slice(0, 3).join(", ")}${missingSubjects.length > 3 ? ` +${missingSubjects.length - 3} more` : ""}`, "error");
