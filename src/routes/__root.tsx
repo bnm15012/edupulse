@@ -423,10 +423,11 @@ function AppShell() {
   }, [pathname]);
 
   useEffect(() => {
+    if (isPublic) return;
     if (tenant?.schoolId) {
       getSchoolBoardFn({ data: { schoolId: tenant.schoolId } }).then((d: any) => setBoard(d)).catch(() => setBoard(null));
     }
-  }, [tenant?.schoolId]);
+  }, [tenant?.schoolId, isPublic]);
 
   if (isPublic) return <Outlet />;
 
