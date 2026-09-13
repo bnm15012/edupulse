@@ -602,7 +602,7 @@ function ExamsPage() {
               <select value={rcClass} onChange={(e) => { setRcClass(Number(e.target.value)); setClassReport(null); setClassReportView("list"); }}
                 className={inputCls + " bg-white"}>
                 <option value={0}>— class —</option>
-                {(isAdmin ? classes : visibleClasses).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {visibleClasses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
               <input value={rcYear} onChange={(e) => setRcYear(e.target.value)} className={inputCls} placeholder="Academic year e.g. 2025-26" />
               {isAdmin ? (
@@ -693,7 +693,7 @@ function ExamsPage() {
               <select value={rcClass} onChange={(e) => { setRcClass(Number(e.target.value)); setRcStudent(""); setSingleReport(null); }}
                 className={inputCls + " bg-white"}>
                 <option value={0}>— class —</option>
-                {(isAdmin ? classes : visibleClasses).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {visibleClasses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
               <select value={rcStudent} onChange={(e) => setRcStudent(e.target.value ? Number(e.target.value) : "")} className={inputCls + " bg-white"}>
                 <option value="">— student —</option>
@@ -701,24 +701,22 @@ function ExamsPage() {
               </select>
               <input value={rcYear} onChange={(e) => setRcYear(e.target.value)} className={inputCls} placeholder="Academic year e.g. 2025-26" />
             </div>
-            {isAdmin && (
-              <button
-                disabled={!rcClass || !rcStudent || !rcYear || singleLoading}
-                onClick={async () => {
-                  if (!rcClass || !rcStudent || !rcYear) return;
-                  setSingleLoading(true); setSingleReport(null);
-                  try {
-                    const d = await getStudentReportFn({ data: { studentId: Number(rcStudent), classId: rcClass, academicYear: rcYear } });
-                    setSingleReport(d);
-                  } catch (err: any) { toast(err?.message ?? "Failed to generate", "error"); }
-                  finally { setSingleLoading(false); }
-                }}
-                className="mb-4 flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm font-semibold rounded-lg transition"
-              >
-                {singleLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                {singleLoading ? "Generating…" : "Generate"}
-              </button>
-            )}
+            <button
+              disabled={!rcClass || !rcStudent || !rcYear || singleLoading}
+              onClick={async () => {
+                if (!rcClass || !rcStudent || !rcYear) return;
+                setSingleLoading(true); setSingleReport(null);
+                try {
+                  const d = await getStudentReportFn({ data: { studentId: Number(rcStudent), classId: rcClass, academicYear: rcYear } });
+                  setSingleReport(d);
+                } catch (err: any) { toast(err?.message ?? "Failed to load", "error"); }
+                finally { setSingleLoading(false); }
+              }}
+              className="mb-4 flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm font-semibold rounded-lg transition"
+            >
+              {singleLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+              {singleLoading ? "Loading…" : "View Report Card"}
+            </button>
             {singleReport && <ConsolidatedReportCard report={singleReport} onClose={() => setSingleReport(null)} />}
           </div>
         </div>
