@@ -58,7 +58,7 @@ function InvitePage() {
               <GraduationCap className="w-5 h-5 text-white" />
             </div>
             <div>
-              <div className="text-lg font-bold text-white">KinderDesk</div>
+              <div className="text-lg font-bold text-white">EduPulse</div>
 
             </div>
           </Link>
@@ -71,7 +71,7 @@ function InvitePage() {
               You've been<br /><span className="text-sky-300">invited!</span>
             </h2>
             <p className="text-slate-300 text-sm leading-relaxed mb-8">
-              Set a password to activate your KinderDesk account. Your access level has already been configured by your school admin.
+              Set a password to activate your EduPulse account. Your access level has already been configured by your school admin.
             </p>
             <div className="space-y-3">
               {["Your account is pre-configured", "Role-based access applied", "Secure 256-bit SSL"].map((t) => (
@@ -83,7 +83,7 @@ function InvitePage() {
             </div>
           </div>
 
-          <p className="text-xs text-slate-500">&copy; {new Date().getFullYear()} KinderDesk Technologies</p>
+          <p className="text-xs text-slate-500">&copy; {new Date().getFullYear()} EduPulse Technologies</p>
         </div>
       </div>
 
@@ -104,7 +104,7 @@ function InvitePage() {
             <div className="w-9 h-9 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center ring-1 ring-white/30">
               <GraduationCap className="w-5 h-5 text-white" />
             </div>
-            <span className="text-lg font-bold text-white drop-shadow">KinderDesk</span>
+            <span className="text-lg font-bold text-white drop-shadow">EduPulse</span>
           </Link>
 
           {!token ? (

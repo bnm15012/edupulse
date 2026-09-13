@@ -92,7 +92,7 @@ function ForgotPassword() {
               <GraduationCap className="w-5 h-5 text-white" />
             </div>
             <div>
-              <div className="text-lg font-bold text-white leading-tight">KinderDesk</div>
+              <div className="text-lg font-bold text-white leading-tight">EduPulse</div>
 
             </div>
           </Link>
@@ -132,7 +132,7 @@ function ForgotPassword() {
               </p>
             </div>
           </div>
-          <div className="text-xs text-slate-500">&copy; {new Date().getFullYear()} KinderDesk Technologies</div>
+          <div className="text-xs text-slate-500">&copy; {new Date().getFullYear()} EduPulse Technologies</div>
         </div>
       </div>
 
@@ -155,7 +155,7 @@ function ForgotPassword() {
             <div className="w-9 h-9 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center ring-1 ring-white/30">
               <GraduationCap className="w-5 h-5 text-white" />
             </div>
-            <span className="text-lg font-bold text-white drop-shadow">KinderDesk</span>
+            <span className="text-lg font-bold text-white drop-shadow">EduPulse</span>
           </Link>
 
           <div className="bg-white rounded-2xl shadow-xl border border-slate-200/80 p-8 xl:p-10">

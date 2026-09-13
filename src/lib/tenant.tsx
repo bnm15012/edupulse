@@ -9,7 +9,7 @@ export type Tenant = {
 
 const defaultTenant: Tenant = {
   schoolId: 1,
-  schoolName: "KinderDesk Demo School",
+  schoolName: "EduPulse Demo School",
   locationId: 1,
   locationName: "Main Branch",
 };
@@ -23,7 +23,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   const [tenant, setTenantState] = useState<Tenant>(defaultTenant);
 
   useEffect(() => {
-    const raw = typeof window !== "undefined" ? localStorage.getItem("kinderdesk-tenant") : null;
+    const raw = typeof window !== "undefined" ? localStorage.getItem("edupulse-tenant") : null;
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as Tenant;
@@ -37,7 +37,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   const setTenant = (t: Tenant) => {
     setTenantState(t);
     if (typeof window !== "undefined") {
-      localStorage.setItem("kinderdesk-tenant", JSON.stringify(t));
+      localStorage.setItem("edupulse-tenant", JSON.stringify(t));
     }
   };
 

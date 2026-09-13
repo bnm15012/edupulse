@@ -100,7 +100,7 @@ function SuperAdminSchools() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-extrabold text-slate-900">All Schools</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Every school registered on KinderDesk</p>
+        <p className="text-sm text-slate-500 mt-0.5">Every school registered on EduPulse</p>
       </div>
 
       {error && (

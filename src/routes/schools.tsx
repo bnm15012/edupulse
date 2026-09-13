@@ -456,7 +456,7 @@ function SubscriptionBilling({ schoolId }: { schoolId: number }) {
           amount: order.amount,
           currency: data.subscription.currency ?? "INR",
           order_id: order.orderId,
-          name: "KinderDesk",
+          name: "EduPulse",
           description: `${data.subscription.plan ?? data.school.plan} subscription - ${data.subscription.billingCycle ?? "monthly"}`,
           prefill: { email: data.school.email ?? "" },
           theme: { color: "#2563eb" },
@@ -521,7 +521,7 @@ function SubscriptionBilling({ schoolId }: { schoolId: number }) {
             <h2 className="text-sm font-bold text-slate-800 mb-1 flex items-center gap-2">
               <CreditCard className="w-4 h-4 text-violet-600" /> Subscription Billing
             </h2>
-            <p className="text-sm text-slate-500">Manage your KinderDesk plan payment</p>
+            <p className="text-sm text-slate-500">Manage your EduPulse plan payment</p>
           </div>
           <span className={`text-xs font-bold px-2.5 py-1 rounded-full border capitalize ${sub.status === "active" && !isExpired ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
             {sub.status === "active" && !isExpired ? "Active" : isExpired ? "Expired" : "Pending"}

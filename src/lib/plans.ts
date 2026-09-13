@@ -1,4 +1,4 @@
-// KinderDesk SaaS pricing model — per location, INR.
+// EduPulse SaaS pricing model — per location, INR.
 // Schools subscribe to a plan. The active `subscriptions` row stores the
 // billed amount, billing cycle, Razorpay subscription ID, and status.
 

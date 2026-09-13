@@ -168,11 +168,16 @@ function SidebarContent({ role, board, onNavClick }: { role: string | null | und
   return (
     <>
       <div className="h-16 flex items-center gap-3 px-5 border-b border-slate-800 shrink-0">
-        <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
-          <GraduationCap className="w-5 h-5 text-white" />
+        <div className="w-9 h-9 rounded-xl overflow-hidden shrink-0 flex items-center justify-center bg-indigo-600">
+          <svg viewBox="0 0 64 64" className="w-8 h-8" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <polygon points="32,13 52,23 32,33 12,23" fill="white" opacity="0.95"/>
+            <rect x="48" y="23" width="2.5" height="11" rx="1.25" fill="white" opacity="0.8"/>
+            <circle cx="49.25" cy="35.5" r="2.5" fill="white" opacity="0.8"/>
+            <polyline points="12,44 20,44 24,38 28,51 32,41 36,44 52,44" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
         </div>
         <div>
-          <div className="text-sm font-bold text-white leading-tight">KinderDesk</div>
+          <div className="text-sm font-bold text-white leading-tight">EduPulse</div>
           <div className="text-[10px] text-slate-400 leading-tight capitalize">
             {isImpersonating ? "Viewing as Admin" : role === "super_admin" ? "Platform Admin" : role === "parent" ? "Parent Portal" : role === "teacher" || role === "staff" ? "Teacher Portal" : "School ERP"}
           </div>
@@ -217,7 +222,7 @@ function SidebarContent({ role, board, onNavClick }: { role: string | null | und
         </div>
       )}
       <div className="px-5 py-4 border-t border-slate-800 shrink-0">
-        <p className="text-[11px] text-slate-600 text-center">KinderDesk v1.0</p>
+        <p className="text-[11px] text-slate-600 text-center">EduPulse v1.0</p>
       </div>
     </>
   );
@@ -345,7 +350,7 @@ function TopBar({ role }: { role: string | null | undefined }) {
   return (
     <header className="h-16 bg-white border-b border-slate-200 px-4 md:px-6 flex items-center justify-between shrink-0 gap-3 shadow-sm">
       <div className="min-w-0">
-        <h1 className="text-sm font-bold text-slate-800 leading-tight truncate">KinderDesk</h1>
+        <h1 className="text-sm font-bold text-slate-800 leading-tight truncate">EduPulse</h1>
         <p className="text-xs text-slate-400 leading-tight truncate">{subtitle}</p>
       </div>
       <div className="flex items-center gap-2 md:gap-3 shrink-0">
@@ -379,7 +384,7 @@ function AppShell() {
       // Always sync tenant from the authenticated user's school/location.
       // This is the single source of truth on every page load / refresh.
       if (user.schoolId && user.locationId) {
-        const stored = typeof window !== "undefined" ? localStorage.getItem("kinderdesk-tenant") : null;
+        const stored = typeof window !== "undefined" ? localStorage.getItem("edupulse-tenant") : null;
         let needsReset = true;
         if (stored) {
           try {
@@ -439,11 +444,16 @@ function AppShell() {
         {/* Blank sidebar skeleton — desktop only */}
         <aside className="hidden md:flex w-60 shrink-0 flex-col bg-slate-900 border-r border-slate-800">
           <div className="h-16 flex items-center gap-3 px-5 border-b border-slate-800">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
-              <GraduationCap className="w-5 h-5 text-white" />
+            <div className="w-9 h-9 rounded-xl overflow-hidden shrink-0 flex items-center justify-center bg-indigo-600">
+              <svg viewBox="0 0 64 64" className="w-8 h-8" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <polygon points="32,13 52,23 32,33 12,23" fill="white" opacity="0.95"/>
+                <rect x="48" y="23" width="2.5" height="11" rx="1.25" fill="white" opacity="0.8"/>
+                <circle cx="49.25" cy="35.5" r="2.5" fill="white" opacity="0.8"/>
+                <polyline points="12,44 20,44 24,38 28,51 32,41 36,44 52,44" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
             </div>
             <div>
-              <div className="text-sm font-bold text-white leading-tight">KinderDesk</div>
+              <div className="text-sm font-bold text-white leading-tight">EduPulse</div>
               <div className="w-20 h-2.5 bg-slate-700 rounded animate-pulse mt-1" />
             </div>
           </div>
@@ -528,7 +538,7 @@ export const Route = createRootRoute({
       { name: "theme-color", content: "#2563eb" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-status-bar-style", content: "default" },
-      { title: "KinderDesk" },
+      { title: "EduPulse" },
     ],
   }),
   shellComponent: RootShell,

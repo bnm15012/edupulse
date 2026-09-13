@@ -7,7 +7,7 @@ export const Route = createFileRoute("/pricing")({
 });
 
 const WA_LINK =
-  "https://wa.me/917326027500?text=Hi%2C%20I%27d%20like%20to%20get%20a%20quote%20for%20KinderDesk%20for%20my%20preschool.";
+  "https://wa.me/917326027500?text=Hi%2C%20I%27d%20like%20to%20get%20a%20quote%20for%20EduPulse%20for%20my%20preschool.";
 
 const WA_ICON = (
   <svg className="w-5 h-5 fill-current shrink-0" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

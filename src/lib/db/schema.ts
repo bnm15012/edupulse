@@ -521,7 +521,7 @@ export const documents = mysqlTable("documents", {
   uploadedAt: timestamp("uploaded_at").defaultNow(),
 });
 
-// ── KinderDesk SaaS Subscriptions (per school billing) ─────────────────────────
+// ── EduPulse SaaS Subscriptions (per school billing) ─────────────────────────
 export const subscriptions = mysqlTable("subscriptions", {
   id: int("id").primaryKey().autoincrement(),
   schoolId: int("school_id").notNull().references(() => schools.id),
@@ -557,7 +557,7 @@ export const subscriptionPayments = mysqlTable("subscription_payments", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// ── KinderDesk SaaS Plan Catalog ─────────────────────────────────────────────
+// ── EduPulse SaaS Plan Catalog ─────────────────────────────────────────────
 export const plans = mysqlTable("plans", {
   id: int("id").primaryKey().autoincrement(),
   name: varchar("name", { length: 100 }).notNull(),

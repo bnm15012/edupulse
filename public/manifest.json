@@ -1,6 +1,6 @@
 {
-  "short_name": "KinderDesk",
-  "name": "KinderDesk - School ERP",
+  "short_name": "EduPulse",
+  "name": "EduPulse - School ERP",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#ffffff",

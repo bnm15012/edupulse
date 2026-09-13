@@ -49,7 +49,7 @@ export function InstallAppButton({ className, iconOnly = false }: { className?: 
 
     if (isIOS) {
       Swal.fire({
-        title: "Install KinderDesk",
+        title: "Install EduPulse",
         html: `<p class="text-left text-sm text-slate-600">1. Tap the <strong>Share</strong> icon in Safari.<br/>2. Scroll down and tap <strong>Add to Home Screen</strong>.<br/>3. Tap <strong>Add</strong>.</p>`,
         icon: "info",
         confirmButtonText: "Got it",
@@ -60,7 +60,7 @@ export function InstallAppButton({ className, iconOnly = false }: { className?: 
 
     if (isAndroid) {
       Swal.fire({
-        title: "Install KinderDesk",
+        title: "Install EduPulse",
         html: `<p class="text-left text-sm text-slate-600">1. Open Chrome's menu (three dots).<br/>2. Tap <strong>Add to Home screen</strong> or <strong>Install app</strong>.<br/>3. Tap <strong>Add</strong>.</p>`,
         icon: "info",
         confirmButtonText: "Got it",
@@ -70,7 +70,7 @@ export function InstallAppButton({ className, iconOnly = false }: { className?: 
     }
 
     Swal.fire({
-      title: "Install KinderDesk",
+      title: "Install EduPulse",
       html: `<p class="text-left text-sm text-slate-600">Open this page on your phone's browser and tap <strong>Add to Home Screen</strong> or <strong>Install app</strong>.</p>`,
       icon: "info",
       confirmButtonText: "Got it",

@@ -174,7 +174,7 @@ function SubscriptionsAdmin() {
       <div>
         <h1 className="text-2xl font-extrabold text-slate-900">Subscriptions</h1>
         <p className="text-sm text-slate-500 mt-0.5">
-          All school subscriptions on KinderDesk
+          All school subscriptions on EduPulse
         </p>
       </div>
 

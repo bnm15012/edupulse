@@ -12,7 +12,7 @@ export const Route = createFileRoute("/")({
 });
 
 const WA_LINK =
-  "https://wa.me/917326027500?text=Hi%2C%20I%27d%20like%20to%20book%20a%20demo%20of%20KinderDesk%20for%20my%20preschool.";
+  "https://wa.me/917326027500?text=Hi%2C%20I%27d%20like%20to%20book%20a%20demo%20of%20EduPulse%20for%20my%20preschool.";
 
 const WA_ICON = (
   <svg className="w-5 h-5 fill-current shrink-0" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -94,7 +94,7 @@ const steps = [
 
 const testimonials = [
   {
-    quote: "KinderDesk transformed how we manage our three branches. Fee collection alone saves us 20 hours a month.",
+    quote: "EduPulse transformed how we manage our three branches. Fee collection alone saves us 20 hours a month.",
     name: "Priya Sharma",
     title: "Principal, Little Scholars Preschool, Pune",
     initials: "PS",
@@ -155,7 +155,7 @@ function Home() {
                 <span className="text-sky-300">Not your<br />spreadsheets.</span>
               </h1>
               <p className="text-xl text-slate-300 leading-relaxed mb-10 max-w-lg">
-                KinderDesk is the all-in-one ERP platform for admissions, fees, attendance, staff, and parent communication — so you can focus on the children.
+                EduPulse is the all-in-one ERP platform for admissions, fees, attendance, staff, and parent communication — so you can focus on the children.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <a
@@ -185,7 +185,7 @@ function Home() {
                   <span className="w-2.5 h-2.5 rounded-full bg-red-400/80" />
                   <span className="w-2.5 h-2.5 rounded-full bg-yellow-400/80" />
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-400/80" />
-                  <span className="ml-3 flex-1 bg-white/10 rounded-md h-5 text-xs text-white/40 flex items-center px-2">app.kinderdesk.in/dashboard</span>
+                  <span className="ml-3 flex-1 bg-white/10 rounded-md h-5 text-xs text-white/40 flex items-center px-2">app.edupulse.in/dashboard</span>
                 </div>
                 {/* Mock dashboard content */}
                 <div className="p-7 space-y-5">
@@ -281,7 +281,7 @@ function Home() {
               Every tool your school needs
             </h2>
             <p className="text-lg text-slate-500 max-w-xl mx-auto">
-              From the first parent inquiry to fee collection and beyond — KinderDesk covers every touchpoint.
+              From the first parent inquiry to fee collection and beyond — EduPulse covers every touchpoint.
             </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -311,7 +311,7 @@ function Home() {
             <span className="text-xs font-bold uppercase tracking-widest text-blue-600 bg-blue-50 px-3 py-1 rounded-full">Simple setup</span>
             <h2 className="text-4xl font-extrabold text-slate-900 mt-4 mb-4">Up and running in minutes</h2>
             <p className="text-lg text-slate-500 max-w-xl mx-auto">
-              No lengthy onboarding. No IT team required. KinderDesk is designed to work from day one.
+              No lengthy onboarding. No IT team required. EduPulse is designed to work from day one.
             </p>
           </div>
 
@@ -642,7 +642,7 @@ function Home() {
         <div className="max-w-4xl mx-auto px-6 text-center">
           <div className="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-6 mb-4">
             <h2 className="text-3xl sm:text-4xl font-extrabold text-white">
-              Take KinderDesk with you
+              Take EduPulse with you
             </h2>
             <InstallAppButton className="inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white px-6 py-3 rounded-xl font-bold text-base transition shadow-lg" />
           </div>
@@ -686,7 +686,7 @@ function Home() {
             Ready to transform your school?
           </h2>
           <p className="text-slate-300 text-lg mb-10 max-w-xl mx-auto leading-relaxed">
-            See KinderDesk in action — book a personalised demo and we'll walk you through everything your school needs.
+            See EduPulse in action — book a personalised demo and we'll walk you through everything your school needs.
           </p>
           <a
             href={WA_LINK}

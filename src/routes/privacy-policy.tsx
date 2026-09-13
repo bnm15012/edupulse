@@ -12,7 +12,7 @@ function PrivacyPolicy() {
         <h1 className="text-4xl font-bold text-slate-900 mb-8">Privacy Policy</h1>
 
         <p className="text-slate-600 mb-6">
-          KinderDesk is committed to protecting the personal information of schools, parents, students, and staff. This policy explains what we collect and how we use it.
+          EduPulse is committed to protecting the personal information of schools, parents, students, and staff. This policy explains what we collect and how we use it.
         </p>
 
         <h2 className="text-2xl font-semibold text-slate-900 mt-8 mb-4">Information we collect</h2>
@@ -22,7 +22,7 @@ function PrivacyPolicy() {
 
         <h2 className="text-2xl font-semibold text-slate-900 mt-8 mb-4">How we use information</h2>
         <p className="text-slate-600 mb-6">
-          Data is used to provide and improve KinderDesk, process payments, generate reports, communicate with users, and ensure the security of the platform.
+          Data is used to provide and improve EduPulse, process payments, generate reports, communicate with users, and ensure the security of the platform.
         </p>
 
         <h2 className="text-2xl font-semibold text-slate-900 mt-8 mb-4">Data sharing</h2>

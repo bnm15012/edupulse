@@ -21,7 +21,7 @@ export async function broadcastPush(
   targetRole?: string
 ) {
   const { publicKey, privateKey } = getVapidConfig();
-  webpush.setVapidDetails("mailto:admin@kinderdesk.in", publicKey, privateKey);
+  webpush.setVapidDetails("mailto:admin@edupulse.in", publicKey, privateKey);
 
   const conditions = [];
   if (targetSchoolId != null) conditions.push(eq(users.schoolId, targetSchoolId));

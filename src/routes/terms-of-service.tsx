@@ -12,12 +12,12 @@ function TermsOfService() {
         <h1 className="text-4xl font-bold text-slate-900 mb-8">Terms of Service</h1>
 
         <p className="text-slate-600 mb-6">
-          By signing up or using KinderDesk, you agree to these terms. Please read them carefully.
+          By signing up or using EduPulse, you agree to these terms. Please read them carefully.
         </p>
 
         <h2 className="text-2xl font-semibold text-slate-900 mt-8 mb-4">Use of the platform</h2>
         <p className="text-slate-600 mb-6">
-          KinderDesk is provided for preschools and educational institutions to manage admissions, students, staff, fees, and operations. You agree to use the platform lawfully and responsibly.
+          EduPulse is provided for preschools and educational institutions to manage admissions, students, staff, fees, and operations. You agree to use the platform lawfully and responsibly.
         </p>
 
         <h2 className="text-2xl font-semibold text-slate-900 mt-8 mb-4">Accounts and access</h2>
@@ -32,7 +32,7 @@ function TermsOfService() {
 
         <h2 className="text-2xl font-semibold text-slate-900 mt-8 mb-4">Limitation of liability</h2>
         <p className="text-slate-600">
-          KinderDesk is provided &quot;as is&quot;. We are not liable for indirect, incidental, or consequential damages arising from the use or inability to use the platform.
+          EduPulse is provided &quot;as is&quot;. We are not liable for indirect, incidental, or consequential damages arising from the use or inability to use the platform.
         </p>
       </article>
     </PublicLayout>

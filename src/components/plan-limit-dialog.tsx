@@ -1,7 +1,7 @@
 import { X, ArrowRight, Zap } from "lucide-react";
 
 const WA_LINK =
-  "https://wa.me/917326027500?text=Hi%2C%20I%27d%20like%20to%20upgrade%20my%20KinderDesk%20plan.";
+  "https://wa.me/917326027500?text=Hi%2C%20I%27d%20like%20to%20upgrade%20my%20EduPulse%20plan.";
 
 const RESOURCE_LABELS: Record<string, string> = {
   students:  "students",

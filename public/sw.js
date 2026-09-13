@@ -1,4 +1,4 @@
-const CACHE_NAME = "kinderdesk-v1";
+const CACHE_NAME = "edupulse-v1";
 const OFFLINE_PAGE = "/";
 
 self.addEventListener("install", (event) => {
@@ -34,10 +34,10 @@ self.addEventListener("push", (event) => {
   try {
     data = event.data.json();
   } catch {
-    data = { title: "KinderDesk", body: "" };
+    data = { title: "EduPulse", body: "" };
   }
   event.waitUntil(
-    self.registration.showNotification(data.title ?? "KinderDesk", {
+    self.registration.showNotification(data.title ?? "EduPulse", {
       body: data.body ?? "",
       icon: data.icon ?? "/icon-192.png",
       badge: data.badge ?? "/icon-192.png",

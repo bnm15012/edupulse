@@ -3336,7 +3336,7 @@ export const addStaffMember = createServerFn({ method: "POST" })
 
       // Send invite email unless disabled
       if (process.env.SKIP_INVITE_EMAIL !== "true") {
-        const appUrl = process.env.APP_URL ?? process.env.VITE_APP_URL ?? "https://kinderdesk.vercel.app";
+        const appUrl = process.env.APP_URL ?? process.env.VITE_APP_URL ?? "https://edupulse.vercel.app";
         const inviteUrl = `${appUrl}/invite?token=${inviteToken}`;
         const [schoolRow] = await db.select({ name: schools.name }).from(schools).where(eq(schools.id, data.schoolId)).limit(1);
         const schoolName = schoolRow?.name ?? "Your School";
@@ -3452,7 +3452,7 @@ export const sendParentInvite = createServerFn({ method: "POST" })
 
     // Send invite email unless disabled
     if (process.env.SKIP_INVITE_EMAIL !== "true") {
-      const appUrl = process.env.APP_URL ?? process.env.VITE_APP_URL ?? "https://kinderdesk.vercel.app";
+      const appUrl = process.env.APP_URL ?? process.env.VITE_APP_URL ?? "https://edupulse.vercel.app";
       const inviteUrl = `${appUrl}/invite?token=${inviteToken}`;
       const [schoolRow] = await db.select({ name: schools.name }).from(schools).where(eq(schools.id, inquiry.schoolId)).limit(1);
       const schoolName = schoolRow?.name ?? "Your School";
@@ -3515,7 +3515,7 @@ export const resendStaffInvite = createServerFn({ method: "POST" })
 
     // Send invite email unless disabled
     if (process.env.SKIP_INVITE_EMAIL !== "true") {
-      const appUrl = process.env.APP_URL ?? process.env.VITE_APP_URL ?? "https://kinderdesk.vercel.app";
+      const appUrl = process.env.APP_URL ?? process.env.VITE_APP_URL ?? "https://edupulse.vercel.app";
       const inviteUrl = `${appUrl}/invite?token=${inviteToken}`;
       const [schoolRow] = await db.select({ name: schools.name }).from(schools).where(eq(schools.id, member.schoolId)).limit(1);
       const schoolName = schoolRow?.name ?? "Your School";
@@ -5819,7 +5819,7 @@ export const sendInvoice = createServerFn({ method: "POST" })
       const studentName = `${student?.firstName ?? ""} ${student?.lastName ?? ""}`.trim();
       const schoolName = school?.name ?? "Your School";
       const dueDate = inv.dueDate ? fmtDate(inv.dueDate) : null;
-      const appUrl = process.env.APP_URL ?? "https://kinderdesk.vercel.app";
+      const appUrl = process.env.APP_URL ?? "https://edupulse.vercel.app";
 
       if (primaryParent?.email) {
         const { sendInvoiceEmail } = await import("@/lib/email");

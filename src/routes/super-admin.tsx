@@ -365,7 +365,7 @@ function SuperAdminDashboard() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900">Overview</h1>
-          <p className="text-sm text-slate-500 mt-0.5">KinderDesk platform — live metrics</p>
+          <p className="text-sm text-slate-500 mt-0.5">EduPulse platform — live metrics</p>
         </div>
         <div className="flex items-center gap-2 text-xs text-slate-400 bg-white border border-slate-200 rounded-lg px-3 py-1.5 shadow-sm">
           <TrendingUp className="w-3.5 h-3.5 text-emerald-500" /> Live data

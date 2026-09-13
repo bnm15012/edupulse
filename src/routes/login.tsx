@@ -11,7 +11,7 @@ export const Route = createFileRoute("/login")({
 });
 
 const TESTIMONIAL = {
-  quote: "KinderDesk transformed how we manage admissions and fees. Our staff saves hours every week.",
+  quote: "EduPulse transformed how we manage admissions and fees. Our staff saves hours every week.",
   name: "Priya Sharma",
   role: "Director, Sunshine Preschool, Pune",
   initials: "PS",
@@ -84,7 +84,7 @@ function Login() {
               <GraduationCap className="w-5 h-5 text-white" />
             </div>
             <div>
-              <div className="text-lg font-bold text-white leading-tight">KinderDesk</div>
+              <div className="text-lg font-bold text-white leading-tight">EduPulse</div>
 
             </div>
           </Link>
@@ -130,7 +130,7 @@ function Login() {
             </div>
           </div>
 
-          <div className="text-xs text-slate-500">&copy; {new Date().getFullYear()} KinderDesk Technologies</div>
+          <div className="text-xs text-slate-500">&copy; {new Date().getFullYear()} EduPulse Technologies</div>
         </div>
       </div>
 
@@ -156,7 +156,7 @@ function Login() {
             <div className="w-9 h-9 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center ring-1 ring-white/30">
               <GraduationCap className="w-5 h-5 text-white" />
             </div>
-            <span className="text-lg font-bold text-white drop-shadow">KinderDesk</span>
+            <span className="text-lg font-bold text-white drop-shadow">EduPulse</span>
           </Link>
 
           {/* Form card */}

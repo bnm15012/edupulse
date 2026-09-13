@@ -25,13 +25,13 @@ function About() {
       <section className="bg-white max-w-6xl mx-auto px-6 py-20">
         <div className="text-center mb-16">
           <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-700 px-4 py-2 rounded-full text-sm font-medium mb-6">
-            <GraduationCap className="w-4 h-4" /> About KinderDesk
+            <GraduationCap className="w-4 h-4" /> About EduPulse
           </div>
           <h1 className="text-4xl sm:text-5xl font-bold text-slate-900 mb-6 max-w-3xl mx-auto">
             We build tools for the people shaping young minds
           </h1>
           <p className="text-lg text-slate-600 max-w-2xl mx-auto">
-            KinderDesk is a modern ERP designed for preschools, nurseries, and early learning centres. We believe school administration should be simple, secure, and focused on children.
+            EduPulse is a modern ERP designed for preschools, nurseries, and early learning centres. We believe school administration should be simple, secure, and focused on children.
           </p>
         </div>
 
@@ -47,7 +47,7 @@ function About() {
           <div>
             <h2 className="text-3xl font-bold text-slate-900 mb-4">Our mission</h2>
             <p className="text-slate-600 leading-relaxed mb-6">
-              Early education is one of the most important stages in a child&apos;s life. Yet too many preschools are still running on spreadsheets, paper records and disconnected tools. KinderDesk brings admissions, fees, attendance, staff, classes, and parent communication into one platform.
+              Early education is one of the most important stages in a child&apos;s life. Yet too many preschools are still running on spreadsheets, paper records and disconnected tools. EduPulse brings admissions, fees, attendance, staff, classes, and parent communication into one platform.
             </p>
             <ul className="space-y-3 mb-8">
               {highlights.map((item) => (

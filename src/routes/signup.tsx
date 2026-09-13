@@ -140,7 +140,7 @@ function Signup() {
               <GraduationCap className="w-5 h-5 text-white" />
             </div>
             <div>
-              <div className="text-lg font-bold text-white leading-tight">KinderDesk</div>
+              <div className="text-lg font-bold text-white leading-tight">EduPulse</div>
 
             </div>
           </Link>
@@ -156,7 +156,7 @@ function Signup() {
               <span className="text-sky-300">your school smarter</span>
             </h2>
             <p className="text-slate-300 text-sm leading-relaxed mb-8">
-              Join preschools across India already running on KinderDesk. Setup takes under 5 minutes.
+              Join preschools across India already running on EduPulse. Setup takes under 5 minutes.
             </p>
 
             {/* Feature list */}
@@ -175,7 +175,7 @@ function Signup() {
             </div>
           </div>
 
-          <div className="text-xs text-slate-500">&copy; {new Date().getFullYear()} KinderDesk Technologies</div>
+          <div className="text-xs text-slate-500">&copy; {new Date().getFullYear()} EduPulse Technologies</div>
         </div>
       </div>
 
@@ -200,7 +200,7 @@ function Signup() {
             <div className="w-9 h-9 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center ring-1 ring-white/30">
               <GraduationCap className="w-5 h-5 text-white" />
             </div>
-            <span className="text-lg font-bold text-white drop-shadow">KinderDesk</span>
+            <span className="text-lg font-bold text-white drop-shadow">EduPulse</span>
           </Link>
 
           {/* Form card */}

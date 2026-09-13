@@ -15,7 +15,7 @@ export const Route = createFileRoute("/confirm")({
     token: typeof search.token === "string" ? search.token : "",
   }),
   head: () => ({
-    meta: [{ title: "Confirm email — KinderDesk" }],
+    meta: [{ title: "Confirm email — EduPulse" }],
   }),
   component: ConfirmPage,
 });
@@ -56,7 +56,7 @@ function ConfirmPage() {
             <GraduationCap className="h-6 w-6 text-white" />
           </span>
         </div>
-        <p className="text-sm font-bold text-slate-800">KinderDesk</p>
+        <p className="text-sm font-bold text-slate-800">EduPulse</p>
 
         {status === "loading" && (
           <>

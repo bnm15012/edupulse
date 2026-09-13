@@ -12,7 +12,7 @@ function RefundPolicy() {
         <h1 className="text-4xl font-bold text-slate-900 mb-8">Refund Policy</h1>
 
         <p className="text-slate-600 mb-6">
-          At KinderDesk, we want every school to be happy with their subscription. If you are not satisfied, the following refund rules apply.
+          At EduPulse, we want every school to be happy with their subscription. If you are not satisfied, the following refund rules apply.
         </p>
 
         <h2 className="text-2xl font-semibold text-slate-900 mt-8 mb-4">Free plan</h2>
