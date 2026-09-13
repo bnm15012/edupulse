@@ -559,17 +559,19 @@ function SubscriptionBilling({ schoolId }: { schoolId: number }) {
           </div>
         </div>
 
-        <button
-          onClick={handlePayNow}
-          disabled={paying}
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-400 text-white text-sm font-bold rounded-xl transition"
-        >
-          {paying ? (
-            <>Processing…</>
-          ) : (
-            <><CreditCard className="w-4 h-4" /> Pay {symbol}{amount.toLocaleString("en-IN")} now</>
-          )}
-        </button>
+        {isExpired ? (
+          <button
+            onClick={handlePayNow}
+            disabled={paying}
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-400 text-white text-sm font-bold rounded-xl transition"
+          >
+            {paying ? <>Processing…</> : <><CreditCard className="w-4 h-4" /> Pay {symbol}{amount.toLocaleString("en-IN")} now</>}
+          </button>
+        ) : (
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 text-sm font-semibold rounded-xl border border-emerald-200">
+            <CheckCircle2 className="w-4 h-4" /> Paid — next renewal on {fmtDate(new Date(sub.currentPeriodEnd!))}
+          </div>
+        )}
 
         <p className="text-xs text-slate-400">
           Payments are processed securely by Razorpay in the platform account. You will receive a receipt after successful payment.
