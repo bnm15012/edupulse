@@ -1879,7 +1879,7 @@ async function assertCanOperateForUser() {
   const { db } = await import("@/lib/db");
   const { users } = await import("@/lib/db/schema");
   const [user] = await db.select({ role: users.role, schoolId: users.schoolId }).from(users).where(eq(users.id, userId)).limit(1);
-  if (!user || user.role === "super_admin") return; // super admin and anonymous calls not blocked
+  if (!user || user.role === "super_admin" || user.role === "parent") return; // super admin and parents are never blocked
   await assertCanOperate(Number(user.schoolId ?? 0));
 }
 
