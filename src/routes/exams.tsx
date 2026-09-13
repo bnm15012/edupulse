@@ -137,7 +137,7 @@ function ExamsPage() {
   const [assignedClassIds, setAssignedClassIds] = useState<number[]>([]);
   const [contextLoaded, setContextLoaded] = useState(false);
 
-  // Admin default tab = "exams"; teacher default = "marks"
+  // Default tab for all users; context load adjusts to "marks" for teachers
   const [activeTab, setActiveTab] = useState<"exams" | "marks" | "reportcard">("exams");
 
   const [classes, setClasses] = useState<ClassRow[]>([]);
@@ -253,16 +253,12 @@ function ExamsPage() {
     ? classes
     : classes.filter((c) => assignedClassIds.includes(c.id));
 
-  // Tabs shown to this user
-  const tabs = isAdmin
-    ? [
-        { key: "exams" as const,      label: "Exams",        icon: ClipboardList },
-        { key: "marks" as const,      label: "Marks Entry",  icon: FileText },
-        { key: "reportcard" as const, label: "Report Cards", icon: FileText },
-      ]
-    : [
-        { key: "marks" as const, label: "Marks Entry", icon: FileText },
-      ];
+  // All tabs visible to everyone — role only controls action buttons
+  const tabs = [
+    { key: "exams" as const,      label: "Exams",        icon: ClipboardList },
+    { key: "marks" as const,      label: "Marks Entry",  icon: FileText },
+    { key: "reportcard" as const, label: "Report Cards", icon: FileText },
+  ];
 
   return (
     <div className="w-full max-w-none space-y-6">
@@ -278,16 +274,18 @@ function ExamsPage() {
         ))}
       </div>
 
-      {/* ── EXAMS TAB (admin only) ───────────────────────────────────────────── */}
-      {activeTab === "exams" && isAdmin && (
+      {/* ── EXAMS TAB ───────────────────────────────────────────────────────── */}
+      {activeTab === "exams" && (
         <div className="space-y-4">
           <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-bold text-slate-800">Exams</h2>
-              <button onClick={() => setExamForm({ classId: selectedClass || 0, academicYear: "", term: "", examType: "", startDate: "", endDate: "", status: "active" })}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg">
-                <Plus className="w-3.5 h-3.5" /> Add exam
-              </button>
+              {isAdmin && (
+                <button onClick={() => setExamForm({ classId: selectedClass || 0, academicYear: "", term: "", examType: "", startDate: "", endDate: "", status: "active" })}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg">
+                  <Plus className="w-3.5 h-3.5" /> Add exam
+                </button>
+              )}
             </div>
 
             {examForm && (
@@ -365,8 +363,10 @@ function ExamsPage() {
                       </div>
                       <div className="flex items-center gap-1">
                         <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">{e.status}</span>
-                        <button onClick={(ev) => { ev.stopPropagation(); setExamForm({ id: e.id, classId: e.classId, academicYear: e.academicYear, term: e.term, examType: e.examType || "", startDate: e.startDate || "", endDate: e.endDate || "", status: e.status }); }} className="p-1.5 text-blue-500 hover:text-blue-700"><Pencil className="w-3.5 h-3.5" /></button>
-                        <button onClick={async (ev) => { ev.stopPropagation(); await deleteExamFn({ data: { id: e.id } }); loadExams(); }} className="p-1.5 text-red-500 hover:text-red-700"><Trash2 className="w-3.5 h-3.5" /></button>
+                        {isAdmin && <>
+                          <button onClick={(ev) => { ev.stopPropagation(); setExamForm({ id: e.id, classId: e.classId, academicYear: e.academicYear, term: e.term, examType: e.examType || "", startDate: e.startDate || "", endDate: e.endDate || "", status: e.status }); }} className="p-1.5 text-blue-500 hover:text-blue-700"><Pencil className="w-3.5 h-3.5" /></button>
+                          <button onClick={async (ev) => { ev.stopPropagation(); await deleteExamFn({ data: { id: e.id } }); loadExams(); }} className="p-1.5 text-red-500 hover:text-red-700"><Trash2 className="w-3.5 h-3.5" /></button>
+                        </>}
                       </div>
                     </div>
                   </div>
@@ -385,7 +385,7 @@ function ExamsPage() {
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <h4 className="text-xs font-bold uppercase tracking-wide text-slate-600">Subjects</h4>
-                        {!esForm && <button onClick={() => setEsForm({ subjectId: 0, maxMarks: "100", examDate: "" })} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition"><Plus className="w-3.5 h-3.5" /> Add subject</button>}
+                        {isAdmin && !esForm && <button onClick={() => setEsForm({ subjectId: 0, maxMarks: "100", examDate: "" })} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition"><Plus className="w-3.5 h-3.5" /> Add subject</button>}
                       </div>
                       {esForm && (
                         <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
@@ -428,7 +428,7 @@ function ExamsPage() {
                               <p className="text-xs text-slate-500">{es.examDate ? fmtDate(es.examDate) : "No date set"}</p>
                             </div>
                             <span className="text-xs text-slate-600">Max {es.maxMarks}</span>
-                            <button onClick={async () => { await deleteExamSubjectFn({ data: { id: es.id } }); setExamSubjects((p) => p.filter((x) => x.id !== es.id)); }} className="p-1.5 text-red-500 hover:text-red-700"><Trash2 className="w-3.5 h-3.5" /></button>
+                            {isAdmin && <button onClick={async () => { await deleteExamSubjectFn({ data: { id: es.id } }); setExamSubjects((p) => p.filter((x) => x.id !== es.id)); }} className="p-1.5 text-red-500 hover:text-red-700"><Trash2 className="w-3.5 h-3.5" /></button>}
                           </div>
                         ))}
                       </div>
@@ -460,14 +460,9 @@ function ExamsPage() {
         </div>
       )}
 
-      {/* ── MARKS ENTRY TAB (teacher + admin) ───────────────────────────────── */}
+      {/* ── MARKS ENTRY TAB ─────────────────────────────────────────────────── */}
       {activeTab === "marks" && (
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm overflow-x-auto">
-          {!isAdmin && (
-            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-700 font-medium">
-              Enter marks for your assigned class(es) below. Once all subjects are filled, the location admin will generate the report cards.
-            </div>
-          )}
 
           <div className="flex items-center gap-2 mb-4 flex-wrap">
             <select value={selectedClass} onChange={(e) => { setSelectedClass(Number(e.target.value)); setMarksData({}); setSelectedExam(null); }} className={inputCls + " w-48 bg-white"}>
@@ -557,8 +552,8 @@ function ExamsPage() {
         </div>
       )}
 
-      {/* ── REPORT CARDS TAB (admin / location admin only) ───────────────────── */}
-      {activeTab === "reportcard" && isAdmin && (
+      {/* ── REPORT CARDS TAB ────────────────────────────────────────────────── */}
+      {activeTab === "reportcard" && (
         <div className="space-y-6">
 
           {/* ── Full class consolidated report ────────────────────────────── */}
@@ -575,28 +570,32 @@ function ExamsPage() {
               <select value={rcClass} onChange={(e) => { setRcClass(Number(e.target.value)); setClassReport(null); setClassReportView("list"); }}
                 className={inputCls + " bg-white"}>
                 <option value={0}>— class —</option>
-                {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {(isAdmin ? classes : visibleClasses).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
               <input value={rcYear} onChange={(e) => setRcYear(e.target.value)} className={inputCls} placeholder="Academic year e.g. 2025-26" />
-              <button
-                disabled={!rcClass || !rcYear || classReportLoading}
-                onClick={async () => {
-                  setClassReportLoading(true); setClassReport(null); setClassReportView("list");
-                  try {
-                    const d = await getClassReportFn({ data: { classId: rcClass, academicYear: rcYear } }) as any;
-                    const list = d.students ?? [];
-                    setClassReport(list);
-                    if (!list.length) toast("No enrolled students found in this class", "error");
-                    else toast(`${list.length} report cards generated`, "success");
-                  } catch (err: any) {
-                    toast(err?.message ?? "Failed to generate report cards", "error");
-                  } finally { setClassReportLoading(false); }
-                }}
-                className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm font-semibold rounded-lg transition"
-              >
-                {classReportLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                {classReportLoading ? "Generating…" : "Generate all"}
-              </button>
+              {isAdmin ? (
+                <button
+                  disabled={!rcClass || !rcYear || classReportLoading}
+                  onClick={async () => {
+                    setClassReportLoading(true); setClassReport(null); setClassReportView("list");
+                    try {
+                      const d = await getClassReportFn({ data: { classId: rcClass, academicYear: rcYear } }) as any;
+                      const list = d.students ?? [];
+                      setClassReport(list);
+                      if (!list.length) toast("No enrolled students found in this class", "error");
+                      else toast(`${list.length} report cards generated`, "success");
+                    } catch (err: any) {
+                      toast(err?.message ?? "Failed to generate report cards", "error");
+                    } finally { setClassReportLoading(false); }
+                  }}
+                  className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm font-semibold rounded-lg transition"
+                >
+                  {classReportLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                  {classReportLoading ? "Generating…" : "Generate all"}
+                </button>
+              ) : (
+                <p className="text-xs text-slate-400 self-center">Generation is done by the admin.</p>
+              )}
             </div>
 
             {/* Class report — student list */}
@@ -662,7 +661,7 @@ function ExamsPage() {
               <select value={rcClass} onChange={(e) => { setRcClass(Number(e.target.value)); setRcStudent(""); setSingleReport(null); }}
                 className={inputCls + " bg-white"}>
                 <option value={0}>— class —</option>
-                {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {(isAdmin ? classes : visibleClasses).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
               <select value={rcStudent} onChange={(e) => setRcStudent(e.target.value ? Number(e.target.value) : "")} className={inputCls + " bg-white"}>
                 <option value="">— student —</option>
@@ -670,22 +669,24 @@ function ExamsPage() {
               </select>
               <input value={rcYear} onChange={(e) => setRcYear(e.target.value)} className={inputCls} placeholder="Academic year e.g. 2025-26" />
             </div>
-            <button
-              disabled={!rcClass || !rcStudent || !rcYear || singleLoading}
-              onClick={async () => {
-                if (!rcClass || !rcStudent || !rcYear) return;
-                setSingleLoading(true); setSingleReport(null);
-                try {
-                  const d = await getStudentReportFn({ data: { studentId: Number(rcStudent), classId: rcClass, academicYear: rcYear } });
-                  setSingleReport(d);
-                } catch (err: any) { toast(err?.message ?? "Failed to generate", "error"); }
-                finally { setSingleLoading(false); }
-              }}
-              className="mb-4 flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm font-semibold rounded-lg transition"
-            >
-              {singleLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-              {singleLoading ? "Generating…" : "Generate"}
-            </button>
+            {isAdmin && (
+              <button
+                disabled={!rcClass || !rcStudent || !rcYear || singleLoading}
+                onClick={async () => {
+                  if (!rcClass || !rcStudent || !rcYear) return;
+                  setSingleLoading(true); setSingleReport(null);
+                  try {
+                    const d = await getStudentReportFn({ data: { studentId: Number(rcStudent), classId: rcClass, academicYear: rcYear } });
+                    setSingleReport(d);
+                  } catch (err: any) { toast(err?.message ?? "Failed to generate", "error"); }
+                  finally { setSingleLoading(false); }
+                }}
+                className="mb-4 flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm font-semibold rounded-lg transition"
+              >
+                {singleLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                {singleLoading ? "Generating…" : "Generate"}
+              </button>
+            )}
             {singleReport && <ConsolidatedReportCard report={singleReport} onClose={() => setSingleReport(null)} />}
           </div>
         </div>

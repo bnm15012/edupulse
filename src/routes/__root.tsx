@@ -82,12 +82,14 @@ const SCHOOL_ADMIN_NAV = [
 ];
 
 const TEACHER_NAV = [
-  { to: "/teacher",               label: "My Dashboard",  icon: LayoutDashboard },
-  { to: "/teacher/attendance",    label: "Attendance",    icon: CalendarCheck   },
-  { to: "/classes",               label: "Classes",       icon: DoorOpen        },
-  { to: "/exams",                 label: "Exams",         icon: ClipboardList   },
-  { to: "/curriculum",            label: "Activities",    icon: BookOpen        },
-  { to: "/teacher/announcements", label: "Announcements", icon: Megaphone       },
+  { to: "/teacher",             label: "My Dashboard",  icon: LayoutDashboard },
+  { to: "/attendance",          label: "Attendance",    icon: CalendarCheck   },
+  { to: "/students",            label: "Students",      icon: Users           },
+  { to: "/academics",           label: "Academics",     icon: GraduationCap   },
+  { to: "/exams",               label: "Exams",         icon: ClipboardList   },
+  { to: "/classes",             label: "Classes",       icon: DoorOpen        },
+  { to: "/curriculum",          label: "Activities",    icon: BookOpen        },
+  { to: "/announcements",       label: "Announcements", icon: Megaphone       },
 ];
 
 const PARENT_NAV = [
