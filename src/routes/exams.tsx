@@ -69,21 +69,39 @@ function ConsolidatedReportCard({ report, onClose }: { report: any; onClose?: ()
         useCORS: true,
         logging: false,
         backgroundColor: "#ffffff",
-        // Override oklch colours: html2canvas v1 parses inline computed styles
-        // which may still contain oklch. We force a white background and rely on
-        // Tailwind utility classes resolving to rgba/hex at paint time in the browser.
         onclone: (clonedDoc: Document) => {
-          // html2canvas can't handle oklch() — walk all elements in the
-          // cloned document and replace oklch computed colours with hex fallbacks
-          clonedDoc.querySelectorAll<HTMLElement>("*").forEach((node) => {
-            const cs = clonedDoc.defaultView!.getComputedStyle(node);
-            const styleProps = ["color", "backgroundColor", "borderTopColor", "borderRightColor", "borderBottomColor", "borderLeftColor"] as const;
-            styleProps.forEach((prop) => {
-              const val = cs[prop];
-              if (val && val.includes("oklch")) {
-                node.style[prop as any] = "#1e293b";
-              }
+          // Tailwind v4 uses oklch() everywhere in its CSS.
+          // html2canvas cannot parse oklch() — patch all <style> and <link> stylesheet
+          // text in the cloned document, replacing oklch(...) with rgb equivalents.
+          const oklchToHex = (css: string) =>
+            css.replace(/oklch\([^)]+\)/g, (match) => {
+              // Map known Tailwind oklch tokens to hex by checking L value ranges
+              // This is a best-effort mapping for the colours used in the report card
+              try {
+                const parts = match.slice(6, -1).trim().split(/[\s/,]+/);
+                const l = parseFloat(parts[0]);
+                if (l > 0.95) return "#f8fafc"; // near-white → slate-50
+                if (l > 0.90) return "#f1f5f9"; // slate-100
+                if (l > 0.85) return "#e2e8f0"; // slate-200
+                if (l > 0.75) return "#cbd5e1"; // slate-300
+                if (l > 0.60) return "#94a3b8"; // slate-400
+                if (l > 0.50) return "#64748b"; // slate-500
+                if (l > 0.40) return "#475569"; // slate-600
+                if (l > 0.30) return "#334155"; // slate-700
+                if (l > 0.20) return "#1e293b"; // slate-800
+                return "#0f172a";               // slate-900
+              } catch { return "#1e293b"; }
             });
+
+          // Patch all inline <style> tags
+          clonedDoc.querySelectorAll<HTMLStyleElement>("style").forEach((s) => {
+            s.textContent = oklchToHex(s.textContent ?? "");
+          });
+
+          // Patch all inline style attributes
+          clonedDoc.querySelectorAll<HTMLElement>("[style]").forEach((node) => {
+            const inl = node.getAttribute("style") ?? "";
+            if (inl.includes("oklch")) node.setAttribute("style", oklchToHex(inl));
           });
         },
       });
