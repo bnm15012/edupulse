@@ -246,10 +246,14 @@ function ExamsPage() {
   useEffect(() => {
     if (rcClass) {
       getStudentsFn({ data: { classId: rcClass } }).then((d) => { setRcStudents(d as Student[]); setRcStudent(""); setSingleReport(null); });
+      // Auto-set year if only one year exists for this class
+      const years = [...new Set(exams.filter(e => e.classId === rcClass).map(e => e.academicYear).filter(Boolean))].sort().reverse();
+      if (years.length === 1) setRcYear(years[0]);
+      else setRcYear("");
     } else {
-      setRcStudents([]); setRcStudent("");
+      setRcStudents([]); setRcStudent(""); setRcYear("");
     }
-  }, [rcClass]);
+  }, [rcClass, exams]);
 
   useEffect(() => {
     // Always load exam subjects whenever an exam is selected (needed by both exams and marks tabs)
@@ -615,7 +619,15 @@ function ExamsPage() {
                 <option value={0}>— class —</option>
                 {visibleClasses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
-              <input value={rcYear} onChange={(e) => setRcYear(e.target.value)} className={inputCls} placeholder="Academic year e.g. 2025-26" />
+              {(() => {
+                const years = rcClass ? [...new Set(exams.filter(e => e.classId === rcClass).map(e => e.academicYear).filter(Boolean))].sort().reverse() : [];
+                return (
+                  <select value={rcYear} onChange={(e) => setRcYear(e.target.value)} className={inputCls + " bg-white"} disabled={!rcClass || years.length === 0}>
+                    <option value="">{!rcClass ? "— select class first —" : years.length === 0 ? "No exams yet" : "— year —"}</option>
+                    {years.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                );
+              })()}
               {isAdmin ? (
                 <button
                   disabled={!rcClass || !rcYear || classReportLoading}
@@ -715,7 +727,15 @@ function ExamsPage() {
                 <option value="">{!rcClass ? "— select class first —" : rcStudents.length === 0 ? "Loading…" : "— student —"}</option>
                 {rcStudents.map((s) => <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>)}
               </select>
-              <input value={rcYear} onChange={(e) => setRcYear(e.target.value)} className={inputCls} placeholder="Academic year e.g. 2025-26" />
+              {(() => {
+                const years = rcClass ? [...new Set(exams.filter(e => e.classId === rcClass).map(e => e.academicYear).filter(Boolean))].sort().reverse() : [];
+                return (
+                  <select value={rcYear} onChange={(e) => setRcYear(e.target.value)} className={inputCls + " bg-white"} disabled={!rcClass || years.length === 0}>
+                    <option value="">{!rcClass ? "— select class first —" : years.length === 0 ? "No exams yet" : "— year —"}</option>
+                    {years.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                );
+              })()}
             </div>
             <button
               disabled={!rcClass || !rcStudent || !rcYear || singleLoading}
