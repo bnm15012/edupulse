@@ -148,11 +148,11 @@ function Home() {
             <div>
               <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 backdrop-blur-sm px-4 py-1.5 rounded-full text-sm font-medium text-white mb-8">
                 <Zap className="w-3.5 h-3.5 text-yellow-400" />
-                Built for Indian preschools & daycares
+                Built for Indian schools & daycares
               </div>
               <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold leading-[1.08] tracking-tight text-white mb-6">
                 Run your<br />
-                preschool.<br />
+                school.<br />
                 <span className="text-sky-300">Not your<br />spreadsheets.</span>
               </h1>
               <p className="text-xl text-slate-300 leading-relaxed mb-10 max-w-lg">

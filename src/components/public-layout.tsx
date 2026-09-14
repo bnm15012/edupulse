@@ -159,7 +159,7 @@ export function PublicLayout({
                   <span>EduPulse</span>
                 </div>
                 <p className="text-sm text-slate-400 leading-relaxed max-w-xs">
-                  The complete ERP platform for preschools, daycares, and child development centres across India.
+                  The complete ERP platform for schools, daycares, and child development centres across India.
                 </p>
                 <div className="flex items-center gap-4 mt-5">
                   <a href="#" aria-label="Facebook" className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center hover:bg-white/20 transition">
