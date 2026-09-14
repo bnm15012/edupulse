@@ -230,9 +230,9 @@ export function CSVImportModal({ schoolId, locationId, onClose, onImported }: Pr
                     <Download className="w-3.5 h-3.5" /> Download sample
                   </button>
                 </div>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1.5">
                   {HEADERS.map((h) => (
-                    <span key={h} className={`text-xs px-2 py-0.5 rounded-full font-mono ${REQUIRED.includes(h as any) ? "bg-indigo-100 text-indigo-700 font-bold" : "bg-white border border-slate-200 text-slate-600"}`}>
+                    <span key={h} className={`text-xs px-2 py-0.5 rounded-full font-mono truncate ${REQUIRED.includes(h as any) ? "bg-indigo-100 text-indigo-700 font-bold" : "bg-white border border-slate-200 text-slate-600"}`}>
                       {h}{REQUIRED.includes(h as any) ? " *" : ""}
                     </span>
                   ))}
