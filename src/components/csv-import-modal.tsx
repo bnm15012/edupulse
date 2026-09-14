@@ -10,7 +10,7 @@ const HEADERS = [
   "parent_relation", "emergency_name", "emergency_phone", "allergies",
 ] as const;
 
-const SAMPLE_HEADER = HEADERS.join(",");
+const REQUIRED = ["first_name", "parent_name"];
 
 type ParsedRow = {
   firstName: string;
@@ -225,19 +225,19 @@ export function CSVImportModal({ schoolId, locationId, onClose, onImported }: Pr
               {/* Column reference */}
               <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
                 <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Your CSV header should look like this</p>
+                  <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Expected CSV columns</p>
                   <button onClick={downloadSample} className="inline-flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-700 font-semibold">
-                    <Download className="w-3.5 h-3.5" /> Download sample CSV
+                    <Download className="w-3.5 h-3.5" /> Download sample
                   </button>
                 </div>
-
-                <div className="bg-white rounded-xl border border-slate-200 p-4 overflow-x-auto">
-                  <p className="text-sm font-mono text-slate-700 whitespace-nowrap">{SAMPLE_HEADER}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {HEADERS.map((h) => (
+                    <span key={h} className={`text-xs px-2 py-0.5 rounded-full font-mono ${REQUIRED.includes(h as any) ? "bg-indigo-100 text-indigo-700 font-bold" : "bg-white border border-slate-200 text-slate-600"}`}>
+                      {h}{REQUIRED.includes(h as any) ? " *" : ""}
+                    </span>
+                  ))}
                 </div>
-
-                <p className="text-xs text-slate-400 mt-2">
-                  Only <span className="font-semibold text-slate-600">first_name</span> and <span className="font-semibold text-slate-600">parent_name</span> are required. All other columns are optional. The order does not matter.
-                </p>
+                <p className="text-xs text-slate-400 mt-2">* Required. All other columns are optional. The order does not matter.</p>
               </div>
             </div>
           )}
