@@ -12,6 +12,12 @@ const HEADERS = [
 
 const REQUIRED = ["first_name", "parent_name"];
 
+const COLUMN_GROUPS = [
+  { title: "Student", columns: ["first_name", "last_name", "date_of_birth", "gender", "blood_group", "class_name"] },
+  { title: "Parent / Guardian", columns: ["parent_name", "parent_phone", "parent_email", "parent_relation"] },
+  { title: "Emergency & Medical", columns: ["emergency_name", "emergency_phone", "allergies"] },
+] as const;
+
 type ParsedRow = {
   firstName: string;
   lastName: string;
@@ -224,20 +230,27 @@ export function CSVImportModal({ schoolId, locationId, onClose, onImported }: Pr
 
               {/* Column reference */}
               <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center justify-between mb-4">
                   <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Expected CSV columns</p>
                   <button onClick={downloadSample} className="inline-flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-700 font-semibold">
                     <Download className="w-3.5 h-3.5" /> Download sample
                   </button>
                 </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {HEADERS.map((h) => (
-                    <span key={h} className={`text-xs px-2 py-0.5 rounded-full font-mono ${REQUIRED.includes(h as any) ? "bg-indigo-100 text-indigo-700 font-bold" : "bg-slate-100 text-slate-600"}`}>
-                      {h}{REQUIRED.includes(h as any) ? " *" : ""}
-                    </span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {COLUMN_GROUPS.map((g) => (
+                    <div key={g.title} className="space-y-2">
+                      <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{g.title}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {g.columns.map((h) => (
+                          <span key={h} className={`text-xs px-2 py-0.5 rounded-full font-mono ${REQUIRED.includes(h as any) ? "bg-indigo-100 text-indigo-700 font-bold" : "bg-white border border-slate-200 text-slate-600"}`}>
+                            {h}{REQUIRED.includes(h as any) ? " *" : ""}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
-                <p className="text-xs text-slate-400 mt-2">* Required. All other columns are optional.</p>
+                <p className="text-xs text-slate-400 mt-4">* Required. All other columns are optional.</p>
               </div>
             </div>
           )}
