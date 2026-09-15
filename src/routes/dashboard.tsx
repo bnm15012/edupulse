@@ -1,9 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Users, UserPlus, DollarSign, Briefcase, DoorOpen, ArrowRight, TrendingUp, AlertCircle, CalendarCheck, CheckCircle2, XCircle, Cake } from "lucide-react";
+import { Users, UserPlus, DollarSign, Briefcase, DoorOpen, ArrowRight, TrendingUp, AlertCircle, CalendarCheck, CheckCircle2, XCircle, Cake, Calendar } from "lucide-react";
 import { useTenant } from "@/lib/tenant";
-import { getDashboardStats, getAttendanceSummary, getUpcomingBirthdays } from "@/lib/auth";
+import { getDashboardStats, getAttendanceSummary, getUpcomingBirthdays, getUpcomingHolidays } from "@/lib/auth";
 
 export const Route = createFileRoute("/dashboard")({
   component: Dashboard,
@@ -33,6 +33,7 @@ function Dashboard() {
   const statsFn = useServerFn(getDashboardStats);
   const attendanceSummaryFn = useServerFn(getAttendanceSummary);
   const birthdaysFn = useServerFn(getUpcomingBirthdays);
+  const holidaysFn = useServerFn(getUpcomingHolidays);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<{
@@ -42,6 +43,7 @@ function Dashboard() {
   } | null>(null);
   const [attendance, setAttendance] = useState<{ students: { present: number; absent: number; marked: number; enrolled: number }; staff: { present: number; marked: number } } | null>(null);
   const [birthdays, setBirthdays] = useState<{ id: number; name: string; dateOfBirth: string; birthdayThisYear: string; daysUntil: number; ageTurning: number; className: string | null }[]>([]);
+  const [holidays, setHolidays] = useState<{ id: number; name: string; date: string; type: string; description: string | null }[]>([]);
 
   useEffect(() => {
     setLoading(true);
@@ -50,8 +52,9 @@ function Dashboard() {
       statsFn({ data: { schoolId: tenant.schoolId, locationId: tenant.locationId } }),
       attendanceSummaryFn({ data: { schoolId: tenant.schoolId, locationId: tenant.locationId } }),
       birthdaysFn({ data: { schoolId: tenant.schoolId, locationId: tenant.locationId } }),
+      holidaysFn({ data: { schoolId: tenant.schoolId, locationId: tenant.locationId } }),
     ])
-      .then(([stats, att, bdays]) => { setData(stats as any); setAttendance(att as any); setBirthdays((bdays as any).birthdays ?? []); })
+      .then(([stats, att, bdays, hdays]) => { setData(stats as any); setAttendance(att as any); setBirthdays((bdays as any).birthdays ?? []); setHolidays((hdays as any) ?? []); })
       .catch((err) => setError(err?.message ?? "Failed to load dashboard"))
       .finally(() => setLoading(false));
   }, [tenant.schoolId, tenant.locationId]);
@@ -163,7 +166,7 @@ function Dashboard() {
           </Link>
 
           {/* Bottom panels */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
 
             {/* Upcoming birthdays */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -192,6 +195,37 @@ function Dashboard() {
                           {b.daysUntil === 0 ? "Today" : b.daysUntil === 1 ? "Tomorrow" : `In ${b.daysUntil} days`}
                         </p>
                       </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Upcoming holidays */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-1 h-5 bg-violet-500 rounded-full" />
+                  <h2 className="text-sm font-bold text-slate-800">Upcoming Holidays</h2>
+                </div>
+                <Link to="/holidays" className="text-xs text-violet-600 hover:underline font-medium flex items-center gap-1">
+                  View all <ArrowRight className="w-3 h-3" />
+                </Link>
+              </div>
+              <div className="divide-y divide-slate-50">
+                {holidays.length === 0 ? (
+                  <p className="px-6 py-8 text-sm text-slate-400 text-center">No holidays in the next 30 days.</p>
+                ) : (
+                  holidays.map((h) => (
+                    <div key={h.id} className="flex items-center justify-between px-6 py-3.5 hover:bg-slate-50 transition">
+                      <div>
+                        <p className="text-sm font-medium text-slate-800 flex items-center gap-2">
+                          <Calendar className="w-3.5 h-3.5 text-violet-500" />
+                          {h.name}
+                        </p>
+                        <p className="text-xs text-slate-400 capitalize">{h.type}{h.description ? ` · ${h.description}` : ""}</p>
+                      </div>
+                      <span className="text-xs font-bold text-slate-600 whitespace-nowrap">{fmtDate(h.date)}</span>
                     </div>
                   ))
                 )}

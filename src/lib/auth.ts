@@ -7982,3 +7982,150 @@ export const verifyPlatformRazorpayPayment = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// HOLIDAYS / EVENTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+const listHolidaysSchema = z.object({
+  schoolId: z.number(),
+  locationId: z.number(),
+  fromDate: z.string().optional(),
+  toDate: z.string().optional(),
+});
+
+export const listHolidays = createServerFn({ method: "GET" })
+  .validator((input: unknown) => listHolidaysSchema.parse(input))
+  .handler(async ({ data }) => {
+    await requireAuth(data.schoolId, data.locationId);
+    const { db } = await import("@/lib/db");
+    const { holidays } = await import("@/lib/db/schema");
+
+    const conditions = [eq(holidays.schoolId, data.schoolId), eq(holidays.locationId, data.locationId)];
+    if (data.fromDate) conditions.push(gte(holidays.date, new Date(data.fromDate)));
+    if (data.toDate) conditions.push(lte(holidays.date, new Date(data.toDate)));
+
+    const rows = await db
+      .select()
+      .from(holidays)
+      .where(and(...conditions))
+      .orderBy(asc(holidays.date));
+
+    return rows.map((h) => ({
+      ...h,
+      date: h.date.toISOString().slice(0, 10),
+      createdAt: h.createdAt?.toISOString() ?? null,
+      updatedAt: h.updatedAt?.toISOString() ?? null,
+    }));
+  });
+
+const addHolidaySchema = z.object({
+  schoolId: z.number(),
+  locationId: z.number(),
+  name: z.string().trim().min(1).max(255),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD
+  type: z.enum(["holiday", "event", "exam", "other"]).default("holiday"),
+  description: z.string().max(1000).optional(),
+  isRecurring: z.boolean().default(false),
+});
+
+export const addHoliday = createServerFn({ method: "POST" })
+  .validator((input: unknown) => addHolidaySchema.parse(input))
+  .handler(async ({ data }) => {
+    await requireAuth(data.schoolId, data.locationId);
+    await assertCanOperateForUser();
+    const { db } = await import("@/lib/db");
+    const { holidays } = await import("@/lib/db/schema");
+
+    const [res] = await db.insert(holidays).values({
+      schoolId: data.schoolId,
+      locationId: data.locationId,
+      name: data.name,
+      date: new Date(data.date),
+      type: data.type,
+      description: data.description || null,
+      isRecurring: data.isRecurring ? 1 : 0,
+    });
+
+    return { ok: true, id: Number((res as any).insertId) };
+  });
+
+const updateHolidaySchema = z.object({
+  holidayId: z.number(),
+  name: z.string().trim().min(1).max(255),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  type: z.enum(["holiday", "event", "exam", "other"]).default("holiday"),
+  description: z.string().max(1000).optional(),
+  isRecurring: z.boolean().default(false),
+});
+
+export const updateHoliday = createServerFn({ method: "POST" })
+  .validator((input: unknown) => updateHolidaySchema.parse(input))
+  .handler(async ({ data }) => {
+    await assertCanOperateForUser();
+    const { db } = await import("@/lib/db");
+    const { holidays } = await import("@/lib/db/schema");
+
+    await db
+      .update(holidays)
+      .set({
+        name: data.name,
+        date: new Date(data.date),
+        type: data.type,
+        description: data.description || null,
+        isRecurring: data.isRecurring ? 1 : 0,
+      })
+      .where(eq(holidays.id, data.holidayId));
+
+    return { ok: true };
+  });
+
+const deleteHolidaySchema = z.object({
+  holidayId: z.number(),
+});
+
+export const deleteHoliday = createServerFn({ method: "POST" })
+  .validator((input: unknown) => deleteHolidaySchema.parse(input))
+  .handler(async ({ data }) => {
+    await assertCanOperateForUser();
+    const { db } = await import("@/lib/db");
+    const { holidays } = await import("@/lib/db/schema");
+    await db.delete(holidays).where(eq(holidays.id, data.holidayId));
+    return { ok: true };
+  });
+
+const getUpcomingHolidaysSchema = z.object({
+  schoolId: z.number(),
+  locationId: z.number(),
+});
+
+export const getUpcomingHolidays = createServerFn({ method: "GET" })
+  .validator((input: unknown) => getUpcomingHolidaysSchema.parse(input))
+  .handler(async ({ data }) => {
+    await requireAuth(data.schoolId, data.locationId);
+    const { db } = await import("@/lib/db");
+    const { holidays } = await import("@/lib/db/schema");
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const nextMonth = new Date(today);
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
+
+    const rows = await db
+      .select()
+      .from(holidays)
+      .where(
+        and(
+          eq(holidays.schoolId, data.schoolId),
+          eq(holidays.locationId, data.locationId),
+          gte(holidays.date, today),
+          lte(holidays.date, nextMonth)
+        )
+      )
+      .orderBy(asc(holidays.date));
+
+    return rows.map((h) => ({
+      ...h,
+      date: h.date.toISOString().slice(0, 10),
+    }));
+  });
+

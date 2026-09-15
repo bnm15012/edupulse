@@ -599,6 +599,23 @@ export const announcementDismissals = mysqlTable("announcement_dismissals", {
   uniqueDismissal: uniqueIndex("announcement_dismissals_user_announcement").on(t.userId, t.announcementId),
 }));
 
+// ── School Holidays / Events ─────────────────────────────────────────────────
+export const holidays = mysqlTable("holidays", {
+  id:          int("id").primaryKey().autoincrement(),
+  schoolId:    int("school_id").notNull().references(() => schools.id),
+  locationId:  int("location_id").notNull().references(() => locations.id),
+  name:        varchar("name", { length: 255 }).notNull(),
+  date:        date("date").notNull(),
+  type:        mysqlEnum("type", ["holiday", "event", "exam", "other"]).default("holiday"),
+  description: text("description"),
+  isRecurring: int("is_recurring").default(0), // 1 = repeats annually
+  createdBy:   int("created_by").references(() => users.id),
+  createdAt:   timestamp("created_at").defaultNow(),
+  updatedAt:   timestamp("updated_at").defaultNow().onUpdateNow(),
+}, (t) => ({
+  uniqueHoliday: uniqueIndex("holidays_school_location_date").on(t.schoolId, t.locationId, t.date, t.name),
+}));
+
 // ── Relations ───────────────────────────────────────────────────────────────
 export const schoolsRelations = relations(schools, ({ many }) => ({
   locations: many(locations),

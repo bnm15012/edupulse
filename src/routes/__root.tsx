@@ -73,6 +73,7 @@ const ADMIN_NAV = [
   { to: "/expenses",        label: "Expenses",       icon: Wallet },
   { to: "/pnl",             label: "P&L",            icon: TrendingUp },
   { to: "/curriculum",      label: "Activities",     icon: BookOpen },
+  { to: "/holidays",        label: "Holidays",       icon: Calendar },
   { to: "/announcements",   label: "Announcements",  icon: Megaphone },
 ];
 
@@ -89,6 +90,7 @@ const TEACHER_NAV = [
   { to: "/exams",               label: "Exams",         icon: ClipboardList   },
   { to: "/classes",             label: "Classes",       icon: DoorOpen        },
   { to: "/curriculum",          label: "Activities",    icon: BookOpen        },
+  { to: "/holidays",            label: "Holidays",      icon: Calendar        },
   { to: "/announcements",       label: "Announcements", icon: Megaphone       },
 ];
 
@@ -98,6 +100,7 @@ const PARENT_NAV = [
   { to: "/parent", label: "Attendance",    icon: CalendarCheck, search: { tab: "attendance" } },
   { to: "/parent", label: "Academics",     icon: GraduationCap, search: { tab: "academics" } },
   { to: "/parent", label: "Activities",    icon: Calendar,     search: { tab: "activities" } },
+  { to: "/parent", label: "Holidays",      icon: Calendar,     search: { tab: "holidays" } },
   { to: "/parent", label: "Announcements", icon: Megaphone,    search: { tab: "announcements" } },
 ];
 

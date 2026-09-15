@@ -24,6 +24,7 @@ import { Route as ExamsRouteImport } from './routes/exams'
 import { Route as ExpensesRouteImport } from './routes/expenses'
 import { Route as FeesRouteImport } from './routes/fees'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as HolidaysRouteImport } from './routes/holidays'
 import { Route as InviteRouteImport } from './routes/invite'
 import { Route as InvoicePrintRouteImport } from './routes/invoice-print'
 import { Route as LocationsRouteImport } from './routes/locations'
@@ -130,6 +131,11 @@ const FeesRoute = FeesRouteImport.update({
 const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
   id: '/forgot-password',
   path: '/forgot-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HolidaysRoute = HolidaysRouteImport.update({
+  id: '/holidays',
+  path: '/holidays',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InviteRoute = InviteRouteImport.update({
@@ -310,6 +316,7 @@ export interface FileRoutesByFullPath {
   '/expenses': typeof ExpensesRoute
   '/fees': typeof FeesRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/holidays': typeof HolidaysRoute
   '/invite': typeof InviteRoute
   '/invoice-print': typeof InvoicePrintRoute
   '/locations': typeof LocationsRoute
@@ -359,6 +366,7 @@ export interface FileRoutesByTo {
   '/expenses': typeof ExpensesRoute
   '/fees': typeof FeesRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/holidays': typeof HolidaysRoute
   '/invite': typeof InviteRoute
   '/invoice-print': typeof InvoicePrintRoute
   '/locations': typeof LocationsRoute
@@ -406,6 +414,7 @@ export interface FileRoutesById {
   '/expenses': typeof ExpensesRoute
   '/fees': typeof FeesRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/holidays': typeof HolidaysRoute
   '/invite': typeof InviteRoute
   '/invoice-print': typeof InvoicePrintRoute
   '/locations': typeof LocationsRoute
@@ -457,6 +466,7 @@ export interface FileRouteTypes {
     | '/expenses'
     | '/fees'
     | '/forgot-password'
+    | '/holidays'
     | '/invite'
     | '/invoice-print'
     | '/locations'
@@ -506,6 +516,7 @@ export interface FileRouteTypes {
     | '/expenses'
     | '/fees'
     | '/forgot-password'
+    | '/holidays'
     | '/invite'
     | '/invoice-print'
     | '/locations'
@@ -552,6 +563,7 @@ export interface FileRouteTypes {
     | '/expenses'
     | '/fees'
     | '/forgot-password'
+    | '/holidays'
     | '/invite'
     | '/invoice-print'
     | '/locations'
@@ -602,6 +614,7 @@ export interface RootRouteChildren {
   ExpensesRoute: typeof ExpensesRoute
   FeesRoute: typeof FeesRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
+  HolidaysRoute: typeof HolidaysRoute
   InviteRoute: typeof InviteRoute
   InvoicePrintRoute: typeof InvoicePrintRoute
   LocationsRoute: typeof LocationsRoute
@@ -728,6 +741,13 @@ declare module '@tanstack/react-router' {
       path: '/forgot-password'
       fullPath: '/forgot-password'
       preLoaderRoute: typeof ForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/holidays': {
+      id: '/holidays'
+      path: '/holidays'
+      fullPath: '/holidays'
+      preLoaderRoute: typeof HolidaysRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/invite': {
@@ -1045,6 +1065,7 @@ const rootRouteChildren: RootRouteChildren = {
   ExpensesRoute: ExpensesRoute,
   FeesRoute: FeesRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
+  HolidaysRoute: HolidaysRoute,
   InviteRoute: InviteRoute,
   InvoicePrintRoute: InvoicePrintRoute,
   LocationsRoute: LocationsRoute,
