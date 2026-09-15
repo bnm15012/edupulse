@@ -3966,144 +3966,192 @@ const generateStudentInvoiceSchema = z.object({
   month: z.string().regex(/^\d{4}-\d{2}$/), // "2025-04"
 });
 
+function isFeeApplicableForMonth(frequency: string, month: string, skipOneTime: boolean) {
+  if (frequency === "one_time") return !skipOneTime;
+  if (frequency === "monthly" || frequency === "hourly") return true;
+  const m = Number(month.split("-")[1]);
+  if (frequency === "quarterly") {
+    const quarterStart = [1, 1, 1, 4, 4, 4, 7, 7, 7, 10, 10, 10][m - 1];
+    return m === quarterStart;
+  }
+  if (frequency === "annually") return m === 1;
+  return false;
+}
+
+async function generateStudentInvoiceCore(
+  data: z.infer<typeof generateStudentInvoiceSchema>,
+  opts: { status?: "draft" | "sent"; skipOneTime?: boolean } = {}
+) {
+  const status = opts.status ?? "draft";
+  const skipOneTime = opts.skipOneTime ?? false;
+  const { db } = await import("@/lib/db");
+  const { invoices, feeStructures, students, daycareSessions, classes, locations } = await import("@/lib/db/schema");
+
+  // Idempotency: if an invoice already exists for this student+month, return it unchanged.
+  const [existing] = await db.select({ id: invoices.id })
+    .from(invoices)
+    .where(and(
+      eq(invoices.studentId, data.studentId),
+      eq(invoices.generatedMonth, data.month),
+      notInArray(invoices.status, ["cancelled", "refunded"]),
+    ))
+    .limit(1);
+  if (existing) return { invoiceId: existing.id, isExisting: true };
+
+  const [student] = await db
+    .select({ currentClassId: students.currentClassId })
+    .from(students)
+    .where(eq(students.id, data.studentId))
+    .limit(1);
+
+  const fees = await db
+    .select({
+      id: feeStructures.id,
+      amount: feeStructures.amount,
+      dueDay: feeStructures.dueDay,
+      name: feeStructures.name,
+      feeType: feeStructures.feeType,
+      frequency: feeStructures.frequency,
+    })
+    .from(feeStructures)
+    .where(and(
+      eq(feeStructures.schoolId, data.schoolId),
+      eq(feeStructures.locationId, data.locationId),
+      or(
+        eq(feeStructures.classId, student?.currentClassId ?? 0),
+        isNull(feeStructures.classId),
+      ),
+    ));
+
+  const applicableFees = fees.filter((f) => isFeeApplicableForMonth(f.frequency ?? "monthly", data.month, skipOneTime));
+
+  // One-time fees should only ever be billed once per student, even manually.
+  const oneTimeFeeIds = applicableFees
+    .filter((f) => f.frequency === "one_time")
+    .map((f) => f.id);
+
+  if (oneTimeFeeIds.length) {
+    const alreadyBilledOneTime = await db
+      .select({ details: invoices.details })
+      .from(invoices)
+      .where(eq(invoices.studentId, data.studentId));
+    const billedSet = new Set<number>();
+    for (const inv of alreadyBilledOneTime) {
+      if (!inv.details) continue;
+      for (const id of oneTimeFeeIds) {
+        if (inv.details.includes(`"feeStructureId":${id}`)) billedSet.add(id);
+      }
+    }
+    for (let i = applicableFees.length - 1; i >= 0; i--) {
+      if (billedSet.has(applicableFees[i].id)) applicableFees.splice(i, 1);
+    }
+  }
+
+  if (!applicableFees.length) return { invoiceId: 0, isExisting: false };
+
+  const [location] = await db
+    .select({ facilityType: locations.facilityType })
+    .from(locations)
+    .where(eq(locations.id, data.locationId))
+    .limit(1);
+  const facilityType = location?.facilityType ?? "school";
+
+  const [classRow] = await db
+    .select({ endTime: classes.endTime })
+    .from(students)
+    .leftJoin(classes, eq(students.currentClassId, classes.id))
+    .where(eq(students.id, data.studentId))
+    .limit(1);
+  const classEndTime = classRow?.endTime ?? null;
+
+  const [y, m] = data.month.split("-").map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  const startDate = `${data.month}-01`;
+  const endDate = `${data.month}-${String(lastDay).padStart(2, "0")}`;
+
+  const sessions = await db
+    .select({
+      sessionDate: daycareSessions.sessionDate,
+      inTime: daycareSessions.inTime,
+      outTime: daycareSessions.outTime,
+      notes: daycareSessions.notes,
+    })
+    .from(daycareSessions)
+    .where(and(
+      eq(daycareSessions.schoolId, data.schoolId),
+      eq(daycareSessions.locationId, data.locationId),
+      eq(daycareSessions.studentId, data.studentId),
+      gte(daycareSessions.sessionDate, new Date(startDate)),
+      lte(daycareSessions.sessionDate, new Date(endDate)),
+    ))
+    .orderBy(daycareSessions.sessionDate);
+
+  function timeToMin(t: string | null) {
+    if (!t || !t.includes(":")) return null;
+    const [h, mn] = t.split(":").map(Number);
+    return h * 60 + mn;
+  }
+
+  function daycareHoursFor(inT: string | null, outT: string | null) {
+    const inM = timeToMin(inT);
+    const outM = timeToMin(outT);
+    if (inM == null || outM == null || outM <= inM) return 0;
+    if (facilityType === "daycare") return (outM - inM) / 60;
+    const endM = timeToMin(classEndTime);
+    if (endM == null) return 0;
+    const startM = Math.max(inM, endM);
+    if (outM <= startM) return 0;
+    return (outM - startM) / 60;
+  }
+
+  const sessionDetails = sessions.map((s) => {
+    const hrs = daycareHoursFor(s.inTime, s.outTime);
+    return {
+      date: s.sessionDate ? s.sessionDate.toISOString().slice(0, 10) : null,
+      inTime: s.inTime,
+      outTime: s.outTime,
+      hours: +hrs.toFixed(2),
+      notes: s.notes,
+    };
+  });
+  const totalHours = sessionDetails.reduce((sum, s) => sum + s.hours, 0);
+
+  const items: any[] = [];
+  let total = 0;
+  for (const f of applicableFees) {
+    const rate = parseFloat(f.amount as any);
+    if (f.feeType === "daycare_hourly") {
+      const amount = +(totalHours * rate).toFixed(2);
+      items.push({ feeStructureId: f.id, name: f.name, feeType: f.feeType, hours: +totalHours.toFixed(2), rate, amount });
+      total += amount;
+    } else {
+      items.push({ feeStructureId: f.id, name: f.name, feeType: f.feeType, amount: rate });
+      total += rate;
+    }
+  }
+
+  const dueDay = applicableFees[0]?.dueDay ?? 1;
+  const dueDate = `${data.month}-${String(dueDay).padStart(2, "0")}`;
+
+  const [res] = await db.insert(invoices).values({
+    schoolId: data.schoolId,
+    locationId: data.locationId,
+    studentId: data.studentId,
+    amount: String(total.toFixed(2)),
+    dueDate: new Date(dueDate) as any,
+    status,
+    generatedMonth: data.month,
+    details: JSON.stringify({ items, daycareSessions: sessionDetails }),
+  });
+  return { invoiceId: Number((res as any).insertId), isExisting: false };
+}
+
 export const generateStudentInvoice = createServerFn({ method: "POST" })
   .validator((i: unknown) => generateStudentInvoiceSchema.parse(i))
   .handler(async ({ data }) => {
     await requireAuth(data.schoolId, data.locationId);
     await assertCanOperateForUser();
-    const { db } = await import("@/lib/db");
-    const { invoices, feeStructures, students, daycareSessions, classes, locations } = await import("@/lib/db/schema");
-
-    // Idempotency: if an invoice already exists for this student+month, return it unchanged.
-    const [existing] = await db.select({ id: invoices.id })
-      .from(invoices)
-      .where(and(
-        eq(invoices.studentId, data.studentId),
-        eq(invoices.generatedMonth, data.month),
-        notInArray(invoices.status, ["cancelled", "refunded"]),
-      ))
-      .limit(1);
-    if (existing) return { invoiceId: existing.id, isExisting: true };
-
-    const [student] = await db
-      .select({ currentClassId: students.currentClassId })
-      .from(students)
-      .where(eq(students.id, data.studentId))
-      .limit(1);
-
-    const fees = await db
-      .select({
-        id: feeStructures.id,
-        amount: feeStructures.amount,
-        dueDay: feeStructures.dueDay,
-        name: feeStructures.name,
-        feeType: feeStructures.feeType,
-      })
-      .from(feeStructures)
-      .where(and(
-        eq(feeStructures.schoolId, data.schoolId),
-        eq(feeStructures.locationId, data.locationId),
-        or(
-          eq(feeStructures.classId, student?.currentClassId ?? 0),
-          isNull(feeStructures.classId),
-        ),
-      ));
-
-    const [location] = await db
-      .select({ facilityType: locations.facilityType })
-      .from(locations)
-      .where(eq(locations.id, data.locationId))
-      .limit(1);
-    const facilityType = location?.facilityType ?? "school";
-
-    const [classRow] = await db
-      .select({ endTime: classes.endTime })
-      .from(students)
-      .leftJoin(classes, eq(students.currentClassId, classes.id))
-      .where(eq(students.id, data.studentId))
-      .limit(1);
-    const classEndTime = classRow?.endTime ?? null;
-
-    const [y, m] = data.month.split("-").map(Number);
-    const lastDay = new Date(y, m, 0).getDate();
-    const startDate = `${data.month}-01`;
-    const endDate = `${data.month}-${String(lastDay).padStart(2, "0")}`;
-
-    const sessions = await db
-      .select({
-        sessionDate: daycareSessions.sessionDate,
-        inTime: daycareSessions.inTime,
-        outTime: daycareSessions.outTime,
-        notes: daycareSessions.notes,
-      })
-      .from(daycareSessions)
-      .where(and(
-        eq(daycareSessions.schoolId, data.schoolId),
-        eq(daycareSessions.locationId, data.locationId),
-        eq(daycareSessions.studentId, data.studentId),
-        gte(daycareSessions.sessionDate, new Date(startDate)),
-        lte(daycareSessions.sessionDate, new Date(endDate)),
-      ))
-      .orderBy(daycareSessions.sessionDate);
-
-    function timeToMin(t: string | null) {
-      if (!t || !t.includes(":")) return null;
-      const [h, mn] = t.split(":").map(Number);
-      return h * 60 + mn;
-    }
-
-    function daycareHoursFor(inT: string | null, outT: string | null) {
-      const inM = timeToMin(inT);
-      const outM = timeToMin(outT);
-      if (inM == null || outM == null || outM <= inM) return 0;
-      if (facilityType === "daycare") return (outM - inM) / 60;
-      const endM = timeToMin(classEndTime);
-      if (endM == null) return 0;
-      const startM = Math.max(inM, endM);
-      if (outM <= startM) return 0;
-      return (outM - startM) / 60;
-    }
-
-    const sessionDetails = sessions.map((s) => {
-      const hrs = daycareHoursFor(s.inTime, s.outTime);
-      return {
-        date: s.sessionDate ? s.sessionDate.toISOString().slice(0, 10) : null,
-        inTime: s.inTime,
-        outTime: s.outTime,
-        hours: +hrs.toFixed(2),
-        notes: s.notes,
-      };
-    });
-    const totalHours = sessionDetails.reduce((sum, s) => sum + s.hours, 0);
-
-    const items: any[] = [];
-    let total = 0;
-    for (const f of fees) {
-      const rate = parseFloat(f.amount as any);
-      if (f.feeType === "daycare_hourly") {
-        const amount = +(totalHours * rate).toFixed(2);
-        items.push({ name: f.name, feeType: f.feeType, hours: +totalHours.toFixed(2), rate, amount });
-        total += amount;
-      } else {
-        items.push({ name: f.name, feeType: f.feeType, amount: rate });
-        total += rate;
-      }
-    }
-
-    const dueDay = fees[0]?.dueDay ?? 1;
-    const dueDate = `${data.month}-${String(dueDay).padStart(2, "0")}`;
-
-    const [res] = await db.insert(invoices).values({
-      schoolId: data.schoolId,
-      locationId: data.locationId,
-      studentId: data.studentId,
-      amount: String(total.toFixed(2)),
-      dueDate: new Date(dueDate) as any,
-      status: "draft",
-      generatedMonth: data.month,
-      details: JSON.stringify({ items, daycareSessions: sessionDetails }),
-    });
-    return { invoiceId: Number((res as any).insertId), isExisting: false };
+    return generateStudentInvoiceCore(data, { status: "draft" });
   });
 
 const getInvoicePrintDataSchema = z.object({ invoiceId: z.number() });
@@ -6064,10 +6112,10 @@ export const runFeeAutomation = createServerFn({ method: "POST" })
 // Core automation logic — also called by the cron endpoint
 export async function runFeeAutomationCore(schoolId: number, locationId: number) {
   const { db } = await import("@/lib/db");
-  const { invoices, feeStructures, classEnrollments } = await import("@/lib/db/schema");
+  const { invoices, classEnrollments } = await import("@/lib/db/schema");
 
   const todayStr = todayIST();
-  const [year, month] = todayStr.split("-").map(Number);
+  const currentMonth = todayStr.slice(0, 7); // "YYYY-MM"
 
   // ── 1. Flip sent invoices past due date → overdue ─────────────────────────
   await db.update(invoices)
@@ -6079,19 +6127,9 @@ export async function runFeeAutomationCore(schoolId: number, locationId: number)
       sql`${invoices.dueDate} < ${todayStr}`,
     ));
 
-  // ── 2. Get all active fee structures ──────────────────────────────────────
-  const structures = await db.select().from(feeStructures)
-    .where(and(
-      eq(feeStructures.schoolId, schoolId),
-      eq(feeStructures.locationId, locationId),
-    ));
-
-  if (!structures.length) return { ok: true, generated: 0 };
-
-  // ── 3. Get enrolled students ───────────────────────────────────────────────
-  const enrollments = await db.select({
+  // ── 2. Get all active students in this location ────────────────────────────
+  const enrollments = await db.selectDistinct({
     studentId: classEnrollments.studentId,
-    classId: classEnrollments.classId,
   }).from(classEnrollments)
     .where(and(
       eq(classEnrollments.schoolId, schoolId),
@@ -6101,85 +6139,20 @@ export async function runFeeAutomationCore(schoolId: number, locationId: number)
 
   if (!enrollments.length) return { ok: true, generated: 0 };
 
-  // ── 4. Determine which billing period each fee structure falls in ──────────
-  // generatedMonth key = billing period start month "YYYY-MM"
-  // Monthly    → current month every month
-  // Quarterly  → Jan, Apr, Jul, Oct  (Q1=01, Q2=04, Q3=07, Q4=10)
-  // Annually   → January only
-  // One-time   → only once ever (generatedMonth = "once")
+  // ── 3. Generate one combined invoice per active student for current month ───
+  // Includes school fees, daycare hourly (with sessions) and daycare monthly.
+  // One-time fees are skipped by auto; they should be generated manually.
 
-  const quarterStart = [1, 1, 1, 4, 4, 4, 7, 7, 7, 10, 10, 10][month - 1]; // month → Q start month
-
-  function getBillingPeriod(frequency: string): string | null {
-    if (frequency === "monthly")   return `${year}-${String(month).padStart(2, "0")}`;
-    if (frequency === "quarterly") return month === quarterStart ? `${year}-${String(quarterStart).padStart(2, "0")}` : null;
-    if (frequency === "annually")  return month === 1 ? `${year}-01` : null;
-    if (frequency === "one_time")  return "once";
-    return null;
+  let generated = 0;
+  for (const en of enrollments) {
+    const r = await generateStudentInvoiceCore(
+      { schoolId, locationId, studentId: en.studentId, month: currentMonth },
+      { status: "sent", skipOneTime: true }
+    );
+    if (!r.isExisting && r.invoiceId) generated++;
   }
 
-  // ── 5. Check existing invoices for dedup ──────────────────────────────────
-  const existing = await db
-    .select({ feeStructureId: invoices.feeStructureId, studentId: invoices.studentId, generatedMonth: invoices.generatedMonth })
-    .from(invoices)
-    .where(and(
-      eq(invoices.schoolId, schoolId),
-      eq(invoices.locationId, locationId),
-    ));
-
-  const existingSet = new Set(existing.map((e) => `${e.feeStructureId}-${e.studentId}-${e.generatedMonth}`));
-
-  const toInsert: {
-    schoolId: number; locationId: number; studentId: number;
-    feeStructureId: number; amount: string; dueDate: Date | null;
-    status: "sent"; generatedMonth: string;
-  }[] = [];
-
-  for (const fs of structures) {
-    const billingPeriod = getBillingPeriod(fs.frequency ?? "monthly");
-    if (!billingPeriod) continue; // not a billing month for this frequency
-
-    const applicableEnrollments = fs.classId
-      ? enrollments.filter((e) => e.classId === fs.classId)
-      : enrollments;
-
-    for (const en of applicableEnrollments) {
-      const key = `${fs.id}-${en.studentId}-${billingPeriod}`;
-      if (existingSet.has(key)) continue;
-
-      // Due date: dueDay within the billing month
-      const dueDay = fs.dueDay ?? 1;
-      let dueDate: Date | null = null;
-      if (billingPeriod !== "once") {
-        const [bYear, bMonth] = billingPeriod.split("-").map(Number);
-        dueDate = new Date(Date.UTC(bYear, bMonth - 1, dueDay));
-      }
-
-      toInsert.push({
-        schoolId,
-        locationId,
-        studentId: en.studentId,
-        feeStructureId: fs.id,
-        amount: fs.amount,
-        dueDate,
-        status: "sent",
-        generatedMonth: billingPeriod,
-      });
-    }
-  }
-
-  if (toInsert.length) {
-    // Insert one by one to skip duplicate-key violations gracefully
-    for (const row of toInsert) {
-      try {
-        await db.insert(invoices).values(row);
-      } catch {
-        // ignore unique constraint violations (already exists)
-      }
-    }
-  }
-
-  return { ok: true, generated: toInsert.length };
+  return { ok: true, generated };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
