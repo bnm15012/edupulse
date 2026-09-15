@@ -4,14 +4,14 @@ import { useServerFn } from "@tanstack/react-start";
 import {
   ArrowLeft, Baby, User, Shield, Heart, BookOpen, FileText,
   Upload, ExternalLink, Loader2, AlertCircle, Pencil, Save, XCircle, Trash2, Plus,
-  BarChart2, GraduationCap, CheckCircle2, X, ChevronDown,
+  BarChart2, GraduationCap, CheckCircle2, X, ChevronDown, Send,
 } from "lucide-react";
 import {
   getStudent, updateStudent, listClassesForSchool,
   updateEmergencyContact, addEmergencyContact,
   uploadDocument, listDocuments, deleteDocument,
   getStudentAttendanceSummary, uploadReportCard, listReportCards, deleteReportCard,
-  promoteStudent, getSession,
+  promoteStudent, getSession, updateParent, sendParentPortalInvite,
 } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { useToast } from "@/lib/toast";
@@ -26,7 +26,7 @@ export const Route = createFileRoute("/students/$studentId")({
 
 type ParentRecord = {
   id: number; name: string; relation: string; phone: string | null;
-  email: string | null; isPrimary: number; isEmergency: number;
+  email: string | null; isPrimary: number; isEmergency: number; userId?: number | null;
 };
 type EmergencyContact = { id: number; name: string; phone: string; relation: string };
 type MedicalRecord = {
@@ -173,6 +173,14 @@ function StudentDetailPage() {
 
   // Edit form state
   const [ef, setEf] = useState<any>({});
+
+  // Per-parent inline editing state
+  const updateParentFn = useServerFn(updateParent);
+  const sendInviteFn = useServerFn(sendParentPortalInvite);
+  const [parentEditing, setParentEditing] = useState<number | null>(null);
+  const [parentForm, setParentForm] = useState({ name: "", phone: "", email: "", relation: "" });
+  const [parentSaving, setParentSaving] = useState(false);
+  const [parentInviting, setParentInviting] = useState<number | null>(null);
 
   // Emergency contact inline editing
   const [ecEditing, setEcEditing] = useState<number | "new" | null>(null);
@@ -482,47 +490,90 @@ function StudentDetailPage() {
               <div className="space-y-4">
                 {/* Primary parent edit */}
                 <Section icon={User} title="Parent / Guardian" color="bg-violet-50 text-violet-700">
-                  {editing ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-500 mb-1">Name</label>
-                        <input value={ef.parentName} onChange={(e) => eSet("parentName", e.target.value)} className={inputCls} />
+                  <div className="space-y-4">
+                    {detail?.parents.length ? detail.parents.map((p) => (
+                      <div key={p.id} className="border border-slate-100 rounded-xl p-4 bg-slate-50/50">
+                        {parentEditing === p.id ? (
+                          <div className="space-y-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-[10px] font-semibold text-slate-500 mb-1">Name</label>
+                                <input value={parentForm.name} onChange={(e) => setParentForm(f => ({ ...f, name: e.target.value }))} className={inputCls} />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-semibold text-slate-500 mb-1">Relation</label>
+                                <select value={parentForm.relation} onChange={(e) => setParentForm(f => ({ ...f, relation: e.target.value }))} className={selectCls}>
+                                  <option value="father">Father</option>
+                                  <option value="mother">Mother</option>
+                                  <option value="guardian">Guardian</option>
+                                  <option value="other">Other</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-semibold text-slate-500 mb-1">Phone</label>
+                                <input value={parentForm.phone} onChange={(e) => setParentForm(f => ({ ...f, phone: e.target.value }))} className={inputCls} />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-semibold text-slate-500 mb-1">Email</label>
+                                <input type="email" value={parentForm.email} onChange={(e) => setParentForm(f => ({ ...f, email: e.target.value }))} className={inputCls} />
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <button disabled={parentSaving} onClick={async () => {
+                                setParentSaving(true);
+                                try {
+                                  await updateParentFn({ data: { parentId: p.id, name: parentForm.name, phone: parentForm.phone || undefined, email: parentForm.email || undefined, relation: parentForm.relation || undefined } });
+                                  load(); setParentEditing(null);
+                                  toast("Parent updated", "success");
+                                } catch (err: any) { toast(err?.message ?? "Failed to update", "error"); }
+                                finally { setParentSaving(false); }
+                              }} className="px-3 py-1.5 text-xs font-bold bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition disabled:opacity-60">
+                                {parentSaving ? "Saving…" : "Save"}
+                              </button>
+                              <button onClick={() => setParentEditing(null)} className="px-3 py-1.5 text-xs font-medium border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition">Cancel</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="space-y-1.5 text-sm min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-semibold text-slate-800">{p.name}</span>
+                                <span className="text-xs text-slate-400 capitalize">({p.relation})</span>
+                                {p.isPrimary === 1 && <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full border border-blue-100">Primary</span>}
+                                {p.userId ? <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100">Portal active</span>
+                                  : <span className="text-[10px] font-bold px-2 py-0.5 bg-amber-50 text-amber-600 rounded-full border border-amber-100">Not activated</span>}
+                              </div>
+                              {p.phone && <p className="text-slate-500">{p.phone}</p>}
+                              {p.email && <p className="text-slate-500">{p.email}</p>}
+                            </div>
+                            {isAdmin && (
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {!p.userId && p.email && (
+                                  <button disabled={parentInviting === p.id} onClick={async () => {
+                                    setParentInviting(p.id);
+                                    try {
+                                      await sendInviteFn({ data: { parentId: p.id } });
+                                      toast(`Invite sent to ${p.email}`, "success");
+                                      load();
+                                    } catch (err: any) { toast(err?.message ?? "Failed to send invite", "error"); }
+                                    finally { setParentInviting(null); }
+                                  }} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold border border-amber-200 text-amber-600 hover:bg-amber-50 rounded-lg transition disabled:opacity-60" title="Send parent portal invite">
+                                    {parentInviting === p.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />} Invite
+                                  </button>
+                                )}
+                                <button onClick={() => { setParentEditing(p.id); setParentForm({ name: p.name, phone: p.phone ?? "", email: p.email ?? "", relation: p.relation ?? "guardian" }); }}
+                                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold border border-slate-200 text-slate-500 hover:border-violet-300 hover:text-violet-600 rounded-lg transition" title="Edit parent">
+                                  <Pencil className="w-3 h-3" /> Edit
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-500 mb-1">Relation</label>
-                        <select value={ef.parentRelation} onChange={(e) => eSet("parentRelation", e.target.value)} className={selectCls}>
-                          <option value="father">Father</option>
-                          <option value="mother">Mother</option>
-                          <option value="guardian">Guardian</option>
-                          <option value="other">Other</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-500 mb-1">Phone</label>
-                        <input value={ef.parentPhone} onChange={(e) => eSet("parentPhone", e.target.value)} className={inputCls} />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-500 mb-1">Email</label>
-                        <input type="email" value={ef.parentEmail} onChange={(e) => eSet("parentEmail", e.target.value)} className={inputCls} />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {detail?.parents.length ? detail.parents.map((p) => (
-                        <div key={p.id} className="space-y-2">
-                          <InfoRow label="Name" value={<span className="font-semibold">{p.name}</span>} />
-                          <InfoRow label="Relation" value={<span className="capitalize">{p.relation}</span>} />
-                          <InfoRow label="Phone" value={p.phone} />
-                          <InfoRow label="Email" value={p.email} />
-                          {p.isPrimary === 1 && (
-                            <span className="inline-block text-[10px] font-bold px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full border border-blue-100">Primary</span>
-                          )}
-                        </div>
-                      )) : (
-                        <p className="text-sm text-slate-400">No parent records found.</p>
-                      )}
-                    </div>
-                  )}
+                    )) : (
+                      <p className="text-sm text-slate-400">No parent records found.</p>
+                    )}
+                  </div>
                 </Section>
 
                 {/* Emergency contacts — editable */}

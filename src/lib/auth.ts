@@ -2163,6 +2163,7 @@ export const getStudent = createServerFn({ method: "GET" })
         relation: parents.relation,
         isPrimary: parents.isPrimary,
         isEmergency: parents.isEmergency,
+        userId: parents.userId,
       })
       .from(parents)
       .where(eq(parents.studentId, data.studentId));
@@ -3792,6 +3793,87 @@ export const sendParentInvite = createServerFn({ method: "POST" })
         await sendParentInviteEmail(email, inviteUrl, schoolName, inquiry.childName ?? "your child");
       } catch (emailErr) {
         console.error("Failed to send parent invite email:", emailErr);
+      }
+    }
+
+    return { ok: true, inviteToken };
+  });
+
+// ── Admin update a parent record (name, phone, email, relation) ──────────────
+const updateParentSchema = z.object({
+  parentId: z.number(),
+  name: z.string().min(1),
+  phone: z.string().optional(),
+  email: z.string().optional(),
+  relation: z.string().optional(),
+});
+
+export const updateParent = createServerFn({ method: "POST" })
+  .validator((input: unknown) => updateParentSchema.parse(input))
+  .handler(async ({ data }) => {
+    await requireSession();
+    await assertCanOperateForUser();
+    const { db } = await import("@/lib/db");
+    const { parents } = await import("@/lib/db/schema");
+    await db.update(parents).set({
+      name: data.name,
+      phone: data.phone ?? null,
+      email: data.email ?? null,
+      relation: data.relation ?? null,
+    } as any).where(eq(parents.id, data.parentId));
+    return { ok: true };
+  });
+
+// ── Send / resend portal invite for a parent by parentId ─────────────────────
+const sendParentPortalInviteSchema = z.object({ parentId: z.number() });
+
+export const sendParentPortalInvite = createServerFn({ method: "POST" })
+  .validator((input: unknown) => sendParentPortalInviteSchema.parse(input))
+  .handler(async ({ data }) => {
+    const session = await requireSession();
+    const { db } = await import("@/lib/db");
+    const { parents, users, students, schools } = await import("@/lib/db/schema");
+
+    const [parent] = await db
+      .select({ id: parents.id, name: parents.name, email: parents.email, userId: parents.userId, studentId: parents.studentId })
+      .from(parents).where(eq(parents.id, data.parentId)).limit(1);
+    if (!parent) throw new Error("Parent not found");
+    if (!parent.email) throw new Error("Parent has no email address — add one first");
+
+    // If already has a userId they've already set up their account
+    if (parent.userId) throw new Error("This parent has already activated their account");
+
+    const email = normalizeEmail(parent.email);
+
+    // Find or create user account
+    let userId: number;
+    const [existingUser] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
+    if (existingUser) {
+      userId = existingUser.id;
+    } else {
+      const [r] = await db.insert(users).values({ email, role: "parent", status: "pending" } as any);
+      userId = Number((r as any).insertId);
+    }
+
+    // Link parent → user
+    await db.update(parents).set({ userId } as any).where(eq(parents.id, parent.id));
+
+    const inviteToken = await new jose.SignJWT({ userId, purpose: "invite" })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime("7d")
+      .sign(JWT_SECRET);
+
+    if (process.env.SKIP_INVITE_EMAIL !== "true") {
+      const appUrl = process.env.APP_URL ?? process.env.VITE_APP_URL ?? "https://edupulse.vercel.app";
+      const inviteUrl = `${appUrl}/invite?token=${inviteToken}`;
+      const [studentRow] = await db.select({ firstName: students.firstName, schoolId: students.schoolId }).from(students).where(eq(students.id, parent.studentId!)).limit(1);
+      const [schoolRow] = await db.select({ name: schools.name }).from(schools).where(eq(schools.id, studentRow?.schoolId ?? session.schoolId)).limit(1);
+      const schoolName = schoolRow?.name ?? "Your School";
+      try {
+        await sendParentInviteEmail(email, inviteUrl, schoolName, studentRow?.firstName ?? "your child");
+      } catch (emailErr) {
+        console.error("Failed to send parent portal invite email:", emailErr);
       }
     }
 
