@@ -447,7 +447,7 @@ function FeeStructuresTab({ schoolId, locationId, classes, isAdmin = true }: { s
                   <td className="px-5 py-4">
                     <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-slate-50 text-slate-600 border border-slate-200">{FEE_TYPE_LABELS[fs.feeType] ?? fs.feeType}</span>
                   </td>
-                  <td className="px-5 py-4 font-bold text-violet-700">{fmt(fs.amount)}</td>
+                  <td className="px-5 py-4 font-bold text-slate-800">{fmt(fs.amount)}</td>
                   <td className="px-5 py-4">
                     <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-violet-50 text-violet-700 border border-violet-200">{FREQ_LABELS[fs.frequency] ?? fs.frequency}</span>
                   </td>
