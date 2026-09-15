@@ -1,9 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Users, UserPlus, DollarSign, Briefcase, DoorOpen, ArrowRight, TrendingUp, AlertCircle, CalendarCheck, CheckCircle2, XCircle } from "lucide-react";
+import { Users, UserPlus, DollarSign, Briefcase, DoorOpen, ArrowRight, TrendingUp, AlertCircle, CalendarCheck, CheckCircle2, XCircle, Cake } from "lucide-react";
 import { useTenant } from "@/lib/tenant";
-import { getDashboardStats, getAttendanceSummary } from "@/lib/auth";
+import { getDashboardStats, getAttendanceSummary, getUpcomingBirthdays } from "@/lib/auth";
 
 export const Route = createFileRoute("/dashboard")({
   component: Dashboard,
@@ -32,6 +32,7 @@ function Dashboard() {
   const { tenant } = useTenant();
   const statsFn = useServerFn(getDashboardStats);
   const attendanceSummaryFn = useServerFn(getAttendanceSummary);
+  const birthdaysFn = useServerFn(getUpcomingBirthdays);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<{
@@ -40,6 +41,7 @@ function Dashboard() {
     upcomingDues: { amount: string; dueDate: string | null; status: string; firstName: string | null; lastName: string | null }[];
   } | null>(null);
   const [attendance, setAttendance] = useState<{ students: { present: number; absent: number; marked: number; enrolled: number }; staff: { present: number; marked: number } } | null>(null);
+  const [birthdays, setBirthdays] = useState<{ id: number; name: string; dateOfBirth: string; birthdayThisYear: string; daysUntil: number; ageTurning: number; className: string | null }[]>([]);
 
   useEffect(() => {
     setLoading(true);
@@ -47,8 +49,9 @@ function Dashboard() {
     Promise.all([
       statsFn({ data: { schoolId: tenant.schoolId, locationId: tenant.locationId } }),
       attendanceSummaryFn({ data: { schoolId: tenant.schoolId, locationId: tenant.locationId } }),
+      birthdaysFn({ data: { schoolId: tenant.schoolId, locationId: tenant.locationId } }),
     ])
-      .then(([stats, att]) => { setData(stats as any); setAttendance(att as any); })
+      .then(([stats, att, bdays]) => { setData(stats as any); setAttendance(att as any); setBirthdays((bdays as any).birthdays ?? []); })
       .catch((err) => setError(err?.message ?? "Failed to load dashboard"))
       .finally(() => setLoading(false));
   }, [tenant.schoolId, tenant.locationId]);
@@ -160,7 +163,40 @@ function Dashboard() {
           </Link>
 
           {/* Bottom panels */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            {/* Upcoming birthdays */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-1 h-5 bg-pink-500 rounded-full" />
+                  <h2 className="text-sm font-bold text-slate-800">Upcoming Birthdays</h2>
+                </div>
+              </div>
+              <div className="divide-y divide-slate-50">
+                {birthdays.length === 0 ? (
+                  <p className="px-6 py-8 text-sm text-slate-400 text-center">No birthdays in the next 30 days.</p>
+                ) : (
+                  birthdays.map((b) => (
+                    <div key={b.id} className="flex items-center justify-between px-6 py-3.5 hover:bg-slate-50 transition">
+                      <div>
+                        <p className="text-sm font-medium text-slate-800 flex items-center gap-2">
+                          <Cake className="w-3.5 h-3.5 text-pink-500" />
+                          {b.name}
+                        </p>
+                        <p className="text-xs text-slate-400">{b.className ? `${b.className} · ` : ""}Turning {b.ageTurning}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-slate-800">{b.birthdayThisYear}</p>
+                        <p className="text-[11px] text-pink-600 font-medium">
+                          {b.daysUntil === 0 ? "Today" : b.daysUntil === 1 ? "Tomorrow" : `In ${b.daysUntil} days`}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
 
             {/* Recent inquiries */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">

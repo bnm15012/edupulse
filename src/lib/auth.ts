@@ -3,7 +3,7 @@ import { getRequest } from "@tanstack/react-start/server";
 import bcrypt from "bcryptjs";
 import * as jose from "jose";
 import { z } from "zod";
-import { eq, and, count, desc, asc, inArray, notInArray, gte, lte, or, sql, gt, lt, ne, isNull } from "drizzle-orm";
+import { eq, and, count, desc, asc, inArray, notInArray, gte, lte, or, sql, gt, lt, ne, isNull, isNotNull } from "drizzle-orm";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
@@ -798,6 +798,107 @@ export const getDashboardStats = createServerFn({ method: "GET" })
         dueDate: due.dueDate ? fmtDate(due.dueDate) : null,
       })),
     };
+  });
+
+// ── Upcoming birthdays (next 30 days) ─────────────────────────────────────────
+// Visible to all school staff + respective parents.
+const getUpcomingBirthdaysSchema = z.object({
+  schoolId: z.number(),
+  locationId: z.number(),
+});
+
+export const getUpcomingBirthdays = createServerFn({ method: "GET" })
+  .validator((input: unknown) => getUpcomingBirthdaysSchema.parse(input))
+  .handler(async ({ data }) => {
+    const req = getRequest();
+    const cookieHeader = req?.headers.get("cookie") ?? "";
+    const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${SESSION_COOKIE}=([^;]+)`));
+    const token = match?.[1];
+    if (!token) throw new Error("Not authenticated");
+
+    const { payload } = await verifySessionToken(token);
+    const userId = Number(payload.userId);
+    if (!userId) throw new Error("Not authenticated");
+
+    const { db } = await import("@/lib/db");
+    const { users, students, parents, classes } = await import("@/lib/db/schema");
+
+    const [user] = await db
+      .select({ id: users.id, role: users.role, schoolId: users.schoolId, locationId: users.locationId, email: users.email })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!user) throw new Error("Not authenticated");
+    if (user.role !== "super_admin" && user.schoolId !== data.schoolId) {
+      throw new Error("Not authorized");
+    }
+
+    // Build base scope based on role
+    let scope: any = eq(students.schoolId, data.schoolId);
+    if (user.role === "super_admin" || user.role === "school_admin") {
+      // all locations in school
+    } else if (user.role === "parent") {
+      // parent sees only their children
+      scope = and(
+        eq(students.schoolId, data.schoolId),
+        eq(parents.email, user.email ?? ""),
+      );
+    } else {
+      // teacher, staff, location_admin, accountant: current location
+      scope = and(eq(students.schoolId, data.schoolId), eq(students.locationId, data.locationId));
+    }
+
+    const baseCols = {
+      id: students.id,
+      firstName: students.firstName,
+      lastName: students.lastName,
+      dateOfBirth: students.dateOfBirth,
+      currentClassId: students.currentClassId,
+    };
+
+    const rows = user.role === "parent"
+      ? await db
+          .select(baseCols)
+          .from(students)
+          .innerJoin(parents, eq(parents.studentId, students.id))
+          .where(and(scope, isNotNull(students.dateOfBirth)))
+      : await db
+          .select(baseCols)
+          .from(students)
+          .where(and(scope, isNotNull(students.dateOfBirth)));
+
+    const classMap = new Map<number, string>();
+    if (rows.length > 0) {
+      const classIds = [...new Set(rows.map((r) => r.currentClassId).filter(Boolean) as number[])];
+      if (classIds.length) {
+        const classRows = await db.select({ id: classes.id, name: classes.name }).from(classes).where(inArray(classes.id, classIds));
+        for (const c of classRows) classMap.set(c.id, c.name);
+      }
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const upcoming = rows
+      .map((s) => {
+        const dob = new Date(s.dateOfBirth!);
+        let bday = new Date(today.getFullYear(), dob.getMonth(), dob.getDate());
+        if (bday < today) bday = new Date(today.getFullYear() + 1, dob.getMonth(), dob.getDate());
+        const daysUntil = Math.floor((bday.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        return {
+          id: s.id,
+          name: `${s.firstName} ${s.lastName}`.trim(),
+          dateOfBirth: fmtDate(s.dateOfBirth!),
+          birthdayThisYear: fmtDate(bday),
+          daysUntil,
+          ageTurning: today.getFullYear() - dob.getFullYear() + (bday.getFullYear() > today.getFullYear() ? 1 : 0),
+          className: s.currentClassId ? classMap.get(s.currentClassId) ?? null : null,
+        };
+      })
+      .filter((b) => b.daysUntil <= 30 && b.daysUntil >= 0)
+      .sort((a, b) => a.daysUntil - b.daysUntil);
+
+    return { birthdays: upcoming };
   });
 
 // ─────────────────────────────────────────────────────────────────────────────
