@@ -61,16 +61,32 @@ function EditSubscriptionModal({
   const updateFn = useServerFn(updateSchoolSubscription);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const toDateInput = (d: any) => {
+    if (!d) return "";
+    try { return new Date(d).toISOString().slice(0, 10); } catch { return ""; }
+  };
   const [f, setF] = useState({
-    planId:       sub?.planId ?? 2,
-    amount:       String(Number(sub?.amount ?? 1999)),
-    billingCycle: (sub?.billingCycle ?? "monthly") as "monthly" | "yearly" | "lifetime",
-    status:       (sub?.status ?? "active") as "trialing"|"active"|"past_due"|"canceled"|"paused",
-    maxStudents:  "",
-    maxStaff:     "",
-    maxLocations: "",
+    planId:            sub?.planId ?? 1,
+    amount:            String(Number(sub?.amount ?? 0)),
+    billingCycle:      (sub?.billingCycle ?? "monthly") as "monthly" | "yearly" | "lifetime",
+    status:            (sub?.status ?? "active") as "trialing"|"active"|"past_due"|"canceled"|"paused",
+    periodStart:       toDateInput(sub?.currentPeriodStart),
+    periodEnd:         toDateInput(sub?.currentPeriodEnd),
+    maxStudents:       "",
+    maxStaff:          "",
+    maxLocations:      "",
   });
   const set = (k: string, v: any) => setF((p) => ({ ...p, [k]: v }));
+
+  // Auto-calculate period end when period start or billing cycle changes
+  const autoCalcEnd = (start: string, cycle: string) => {
+    if (!start) return;
+    const d = new Date(start);
+    if (cycle === "monthly")  d.setMonth(d.getMonth() + 1);
+    else if (cycle === "yearly") d.setFullYear(d.getFullYear() + 1);
+    else return; // lifetime — no end
+    setF((p) => ({ ...p, periodEnd: d.toISOString().slice(0, 10) }));
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,6 +99,8 @@ function EditSubscriptionModal({
           amount: Number(f.amount),
           billingCycle: f.billingCycle,
           status: f.status,
+          periodStart: f.periodStart || undefined,
+          periodEnd:   f.periodEnd   || undefined,
           ...(f.maxStudents  ? { maxStudents:  Number(f.maxStudents)  } : {}),
           ...(f.maxStaff     ? { maxStaff:     Number(f.maxStaff)     } : {}),
           ...(f.maxLocations ? { maxLocations: Number(f.maxLocations) } : {}),
@@ -131,6 +149,45 @@ function EditSubscriptionModal({
                 <option value="paused">Paused</option>
                 <option value="canceled">Canceled</option>
               </select>
+            </div>
+          </div>
+
+          {/* Billing period */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Billing period (optional for Free)</p>
+              {f.periodStart && f.billingCycle !== "lifetime" && (
+                <button
+                  type="button"
+                  onClick={() => autoCalcEnd(f.periodStart, f.billingCycle)}
+                  className="text-xs text-blue-600 hover:underline font-medium"
+                >
+                  Auto-fill end date
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Period start</label>
+                <input
+                  type="date"
+                  value={f.periodStart}
+                  onChange={(e) => set("periodStart", e.target.value)}
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Period end</label>
+                <input
+                  type="date"
+                  value={f.periodEnd}
+                  onChange={(e) => set("periodEnd", e.target.value)}
+                  className={inputCls}
+                />
+                {!f.periodEnd && Number(f.amount) > 0 && (
+                  <p className="text-[10px] text-amber-600 mt-1">Paid plan — set an end date or school won't expire</p>
+                )}
+              </div>
             </div>
           </div>
 

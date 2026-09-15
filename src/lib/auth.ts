@@ -1852,6 +1852,8 @@ const updateSchoolSubscriptionSchema = z.object({
   amount: z.number(),
   billingCycle: z.enum(["monthly", "yearly", "lifetime"]),
   status: z.enum(["trialing", "active", "past_due", "canceled", "paused"]),
+  periodStart: z.string().optional(), // ISO date string e.g. "2026-09-16"
+  periodEnd: z.string().optional(),
   maxStudents: z.number().optional(),
   maxStaff: z.number().optional(),
   maxLocations: z.number().optional(),
@@ -1872,6 +1874,9 @@ export const updateSchoolSubscription = createServerFn({ method: "POST" })
     const [existing] = await db.select({ id: subscriptions.id }).from(subscriptions).where(eq(subscriptions.schoolId, data.schoolId)).limit(1);
     const [plan] = await db.select({ id: plans.id, name: plans.name }).from(plans).where(eq(plans.id, data.planId)).limit(1);
     const planName = plan?.name.toLowerCase() ?? "free";
+    const periodStart = data.periodStart ? new Date(data.periodStart) : null;
+    const periodEnd   = data.periodEnd   ? new Date(data.periodEnd)   : null;
+
     if (existing) {
       await db.update(subscriptions).set({
         plan: planName,
@@ -1879,6 +1884,8 @@ export const updateSchoolSubscription = createServerFn({ method: "POST" })
         amount: String(data.amount),
         billingCycle: data.billingCycle,
         status: data.status,
+        ...(periodStart !== null ? { currentPeriodStart: periodStart } : {}),
+        ...(periodEnd   !== null ? { currentPeriodEnd:   periodEnd   } : {}),
       }).where(eq(subscriptions.id, existing.id));
     } else {
       await db.insert(subscriptions).values({
@@ -1888,6 +1895,8 @@ export const updateSchoolSubscription = createServerFn({ method: "POST" })
         amount: String(data.amount),
         billingCycle: data.billingCycle,
         status: data.status,
+        ...(periodStart !== null ? { currentPeriodStart: periodStart } : {}),
+        ...(periodEnd   !== null ? { currentPeriodEnd:   periodEnd   } : {}),
       });
     }
 
