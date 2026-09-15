@@ -1,7 +1,7 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Plus, X, Calendar, Loader2, AlertCircle, Trash2, Pencil, Save, CalendarDays } from "lucide-react";
+import { Plus, X, Calendar, Loader2, AlertCircle, Trash2, Pencil, Save, CalendarDays, Search } from "lucide-react";
 import { listHolidays, addHoliday, updateHoliday, deleteHoliday, getSession, listClasses } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { useToast } from "@/lib/toast";
@@ -33,7 +33,7 @@ const TYPE_COLORS: Record<string, string> = {
   other:   "bg-slate-100 text-slate-600",
 };
 
-const inputCls = "w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm transition";
+const inputCls = "w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm transition";
 
 export default function Holidays() {
   const { tenant } = useTenant();
@@ -51,16 +51,28 @@ export default function Holidays() {
   const [error, setError] = useState("");
   const [role, setRole] = useState<string>("");
   const [isAdmin, setIsAdmin] = useState(false);
+  const [search, setSearch] = useState("");
 
-  const [editing, setEditing] = useState<Holiday | null>(null);
-  const [form, setForm] = useState({ name: "", date: todayIST(), type: "holiday" as const, description: "", isRecurring: false, classId: "" });
+  const [form, setForm] = useState<{ id?: number; name: string; date: string; type: "holiday" | "event" | "exam" | "other"; description: string; isRecurring: boolean; classId: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [confirmId, setConfirmId] = useState<number | null>(null);
 
   const canEdit = isAdmin || role === "location_admin";
 
+  const filteredHolidays = useMemo(() => {
+    const q = search.toLowerCase();
+    return holidays.filter((h) =>
+      (h.name ?? "").toLowerCase().includes(q)
+      || (h.description ?? "").toLowerCase().includes(q)
+      || h.type.toLowerCase().includes(q)
+      || (h.className ?? "").toLowerCase().includes(q)
+      || h.date.includes(q)
+    );
+  }, [holidays, search]);
+
   const load = () => {
+    if (!tenant) return;
     setLoading(true);
     Promise.all([
       listFn({ data: { schoolId: tenant.schoolId, locationId: tenant.locationId } }),
@@ -80,32 +92,46 @@ export default function Holidays() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, [tenant.schoolId, tenant.locationId]);
+  useEffect(() => { load(); }, [tenant?.schoolId, tenant?.locationId]);
 
-  const resetForm = () => {
-    setEditing(null);
+  const startAdd = () => {
     setForm({ name: "", date: todayIST(), type: "holiday", description: "", isRecurring: false, classId: "" });
   };
 
   const startEdit = (h: Holiday) => {
-    setEditing(h);
-    setForm({ name: h.name, date: h.date, type: h.type, description: h.description ?? "", isRecurring: h.isRecurring === 1, classId: h.classId?.toString() ?? "" });
+    setForm({
+      id: h.id,
+      name: h.name,
+      date: h.date,
+      type: h.type,
+      description: h.description ?? "",
+      isRecurring: h.isRecurring === 1,
+      classId: h.classId?.toString() ?? "",
+    });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.name.trim() || !form.date) return;
+  const cancelForm = () => setForm(null);
+
+  const save = async () => {
+    if (!form || !form.name.trim() || !form.date) return;
     setSaving(true);
     try {
-      const classId = form.classId ? Number(form.classId) : undefined;
-      if (editing) {
-        await updateFn({ data: { holidayId: editing.id, ...form, classId } });
+      const payload = {
+        name: form.name,
+        date: form.date,
+        type: form.type,
+        description: form.description,
+        isRecurring: form.isRecurring,
+        classId: form.classId ? Number(form.classId) : undefined,
+      };
+      if (form.id) {
+        await updateFn({ data: { holidayId: form.id, ...payload } });
         toast("Holiday updated", "success");
       } else {
-        await addFn({ data: { schoolId: tenant.schoolId, locationId: tenant.locationId, ...form, classId } });
+        await addFn({ data: { schoolId: tenant.schoolId, locationId: tenant.locationId, ...payload } });
         toast("Holiday added", "success");
       }
-      resetForm();
+      setForm(null);
       load();
     } catch (err: any) {
       toast(err?.message ?? "Failed to save", "error");
@@ -132,72 +158,17 @@ export default function Holidays() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Holidays & Events</h1>
           <p className="text-sm text-slate-500 mt-0.5">Upcoming holidays, events and exam dates for this branch.</p>
         </div>
+        {canEdit && (
+          <button onClick={startAdd} className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition">
+            <Plus className="w-4 h-4" /> Add Holiday
+          </button>
+        )}
       </div>
-
-      {canEdit && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-          <h2 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
-            {editing ? <Pencil className="w-4 h-4 text-blue-500" /> : <Plus className="w-4 h-4 text-blue-500" />}
-            {editing ? "Edit holiday" : "Add holiday"}
-          </h2>
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Name *</label>
-              <input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} placeholder="Diwali break" className={inputCls} required />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Date *</label>
-              <input type="date" value={form.date} onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))} className={inputCls} required />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Type</label>
-              <select value={form.type} onChange={(e) => setForm((p) => ({ ...p, type: e.target.value as any }))} className={inputCls}>
-                <option value="holiday">Holiday</option>
-                <option value="event">Event</option>
-                <option value="exam">Exam</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Description</label>
-              <input value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} placeholder="Optional note" className={inputCls} />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Class (optional)</label>
-              <select value={form.classId} onChange={(e) => setForm((p) => ({ ...p, classId: e.target.value }))} className={inputCls}>
-                <option value="">All classes in this branch</option>
-                {classes.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-                <input type="checkbox" checked={form.isRecurring} onChange={(e) => setForm((p) => ({ ...p, isRecurring: e.target.checked }))} className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
-                Annual
-              </label>
-              <button
-                type="submit"
-                disabled={saving}
-                className="ml-auto inline-flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm font-bold rounded-xl transition"
-              >
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                {editing ? "Update" : "Add"}
-              </button>
-              {editing && (
-                <button type="button" onClick={resetForm} className="px-3 py-2.5 border border-slate-200 rounded-xl text-slate-600 text-sm hover:bg-slate-50">
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-          </form>
-        </div>
-      )}
 
       {error && (
         <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
@@ -205,11 +176,20 @@ export default function Holidays() {
         </div>
       )}
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+        <div className="mb-4">
+          <label className="block text-xs font-semibold text-slate-600 mb-1.5">Search</label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} className={inputCls + " bg-white pl-9 h-10 w-full sm:max-w-sm"} placeholder="Search by name, type, description, class or date" />
+          </div>
+        </div>
+
+        <div className="overflow-x-auto rounded-xl border border-slate-200">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                <th className="px-5 py-3.5 w-16">S.No</th>
                 <th className="px-5 py-3.5 w-40">Date</th>
                 <th className="px-5 py-3.5">Name</th>
                 <th className="px-5 py-3.5">Type</th>
@@ -219,21 +199,71 @@ export default function Holidays() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
+              {form && canEdit && (
+                <tr className="bg-slate-50">
+                  <td className="px-5 py-3 text-slate-400 w-16 text-center font-semibold">—</td>
+                  <td className="px-5 py-3 w-40">
+                    <div className="space-y-2">
+                      <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className={inputCls + " bg-white"} required />
+                      <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+                        <input type="checkbox" checked={form.isRecurring} onChange={(e) => setForm({ ...form, isRecurring: e.target.checked })} className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                        Annual
+                      </label>
+                    </div>
+                  </td>
+                  <td className="px-5 py-3">
+                    <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Diwali break" className={inputCls + " bg-white"} required />
+                  </td>
+                  <td className="px-5 py-3">
+                    <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as any })} className={inputCls + " bg-white"}>
+                      <option value="holiday">Holiday</option>
+                      <option value="event">Event</option>
+                      <option value="exam">Exam</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </td>
+                  <td className="px-5 py-3 w-48">
+                    <select value={form.classId} onChange={(e) => setForm({ ...form, classId: e.target.value })} className={inputCls + " bg-white"}>
+                      <option value="">All classes in this branch</option>
+                      {classes.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-5 py-3">
+                    <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Optional note" className={inputCls + " bg-white"} />
+                  </td>
+                  <td className="px-5 py-3">
+                    <div className="flex items-center justify-end gap-2">
+                      <button onClick={cancelForm} className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg border border-red-200 text-red-600 bg-red-50 text-xs font-semibold transition hover:bg-red-100">
+                        <X className="w-3.5 h-3.5" /> Cancel
+                      </button>
+                      <button onClick={save} disabled={saving} className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white text-xs font-semibold transition">
+                        {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} Save
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )}
+
               {loading ? (
                 Array.from({ length: 4 }).map((_, i) => (
-                  <tr key={i}>{Array.from({ length: canEdit ? 6 : 5 }).map((__, j) => <td key={j} className="px-5 py-4"><div className="h-4 bg-slate-100 rounded animate-pulse" /></td>)}</tr>
+                  <tr key={i}>{Array.from({ length: canEdit ? 7 : 6 }).map((__, j) => <td key={j} className="px-5 py-4"><div className="h-4 bg-slate-100 rounded animate-pulse" /></td>)}</tr>
                 ))
-              ) : holidays.length === 0 ? (
+              ) : filteredHolidays.length === 0 ? (
                 <tr>
-                  <td colSpan={canEdit ? 6 : 5} className="px-5 py-14 text-center">
+                  <td colSpan={canEdit ? 7 : 6} className="px-5 py-14 text-center">
                     <CalendarDays className="w-10 h-10 mx-auto mb-3 text-slate-200" />
-                    <p className="text-slate-400 text-sm">No holidays added yet.</p>
+                    <p className="text-slate-400 text-sm">
+                      {search ? "No matching holidays" : "No holidays added yet."}
+                    </p>
                   </td>
                 </tr>
               ) : (
-                holidays.map((h) => (
+                filteredHolidays.map((h, i) => (
                   <tr key={h.id} className="hover:bg-slate-50 transition">
-                    <td className="px-5 py-4 font-medium text-slate-800 whitespace-nowrap">
+                    <td className="px-5 py-4 text-slate-500 w-16">{i + 1}</td>
+                    <td className="px-5 py-4 font-medium text-slate-800 whitespace-nowrap w-40">
                       <div className="flex items-center gap-2">
                         <Calendar className="w-4 h-4 text-slate-400" />
                         {fmtDate(h.date)}
@@ -246,7 +276,7 @@ export default function Holidays() {
                         {h.type}
                       </span>
                     </td>
-                    <td className="px-5 py-4 text-slate-500">{h.classId ? h.className : <span className="text-slate-300 text-xs">All classes</span>}</td>
+                    <td className="px-5 py-4 text-slate-500 w-48">{h.classId ? h.className : <span className="text-slate-300 text-xs">All classes</span>}</td>
                     <td className="px-5 py-4 text-slate-500">{h.description ?? <span className="text-slate-300">—</span>}</td>
                     {canEdit && (
                       <td className="px-5 py-4">
