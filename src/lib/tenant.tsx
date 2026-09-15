@@ -5,6 +5,7 @@ export type Tenant = {
   schoolName: string;
   locationId: number;
   locationName: string;
+  facilityType?: string; // "school" | "daycare" | "both"
 };
 
 const defaultTenant: Tenant = {
@@ -12,6 +13,7 @@ const defaultTenant: Tenant = {
   schoolName: "EduPulse Demo School",
   locationId: 1,
   locationName: "Main Branch",
+  facilityType: "school",
 };
 
 const TenantContext = createContext<{

@@ -155,13 +155,14 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
-function SidebarContent({ role, board, onNavClick }: { role: string | null | undefined; board?: string | null; onNavClick?: () => void }) {
+function SidebarContent({ role, board, facilityType, onNavClick }: { role: string | null | undefined; board?: string | null; facilityType?: string; onNavClick?: () => void }) {
   const { pathname, search } = useLocation();
   const effectiveRole =
     role === "super_admin" && !pathname.startsWith("/super-admin")
       ? "school_admin"
       : role;
-  const nav = navForRole(effectiveRole, board);
+  const hasDaycare = facilityType === "both" || facilityType === "daycare";
+  const nav = navForRole(effectiveRole, board).filter((item) => item.to !== "/daycare" || hasDaycare);
   const isImpersonating = role === "super_admin" && effectiveRole === "school_admin";
   const searchParams = new URLSearchParams(search);
 
@@ -235,16 +236,16 @@ function SidebarContent({ role, board, onNavClick }: { role: string | null | und
   );
 }
 
-function Sidebar({ role, board }: { role: string | null | undefined; board?: string | null }) {
+function Sidebar({ role, board, facilityType }: { role: string | null | undefined; board?: string | null; facilityType?: string }) {
   return (
     /* Desktop sidebar — always visible, hidden on mobile (bottom tab bar used instead) */
     <aside className="hidden md:flex w-60 shrink-0 flex-col bg-slate-900 border-r border-slate-800">
-      <SidebarContent role={role} board={board} />
+      <SidebarContent role={role} board={board} facilityType={facilityType} />
     </aside>
   );
 }
 
-function BottomTabBar({ role, board }: { role: string | null | undefined; board?: string | null }) {
+function BottomTabBar({ role, board, facilityType }: { role: string | null | undefined; board?: string | null; facilityType?: string }) {
   const { pathname, search } = useLocation();
   const navigate = useNavigate();
   const [moreOpen, setMoreOpen] = useState(false);
@@ -252,7 +253,8 @@ function BottomTabBar({ role, board }: { role: string | null | undefined; board?
     role === "super_admin" && !pathname.startsWith("/super-admin")
       ? "school_admin"
       : role;
-  const nav = navForRole(effectiveRole, board);
+  const hasDaycare = facilityType === "both" || facilityType === "daycare";
+  const nav = navForRole(effectiveRole, board).filter((item) => item.to !== "/daycare" || hasDaycare);
 
   const isExact = (to: string) =>
     to === "/dashboard" || to === "/teacher" || to === "/parent" || to === "/super-admin";
@@ -401,7 +403,10 @@ function AppShell() {
           } catch { /* bad JSON — reset */ }
         }
         if (needsReset) {
-          setTenant({ schoolId: user.schoolId, locationId: user.locationId, schoolName: "School", locationName: "Branch" });
+          setTenant({ schoolId: user.schoolId, locationId: user.locationId, schoolName: "School", locationName: "Branch", facilityType: (user as any).facilityType ?? "school" });
+        } else {
+          // Always refresh facilityType in case branch was updated
+          setTenant({ ...JSON.parse(typeof window !== "undefined" ? localStorage.getItem("edupulse-tenant") ?? "{}" : "{}"), facilityType: (user as any).facilityType ?? "school" });
         }
       }
       setRole(user.role);
@@ -490,7 +495,7 @@ function AppShell() {
 
   return (
     <div className="h-screen flex overflow-hidden">
-      <Sidebar role={role} board={board} />
+      <Sidebar role={role} board={board} facilityType={tenant.facilityType} />
       <div className="flex-1 flex flex-col min-w-0 bg-slate-50 overflow-hidden">
         <TopBar role={role} />
         {/* Announcement banner — shown to all non-super-admin roles */}
@@ -503,7 +508,7 @@ function AppShell() {
           <Outlet />
         </main>
         {/* Mobile bottom tab bar */}
-        <BottomTabBar role={role} board={board} />
+        <BottomTabBar role={role} board={board} facilityType={tenant.facilityType} />
       </div>
     </div>
   );

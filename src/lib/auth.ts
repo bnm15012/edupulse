@@ -364,7 +364,7 @@ export const getSession = createServerFn({ method: "GET" }).handler(async () => 
     if (!userId) return null;
 
     const { db } = await import("@/lib/db");
-    const { users, schools } = await import("@/lib/db/schema");
+    const { users, schools, locations } = await import("@/lib/db/schema");
     const [user] = await db
       .select({
         id: users.id,
@@ -393,7 +393,18 @@ export const getSession = createServerFn({ method: "GET" }).handler(async () => 
       if (schoolRow?.status === "suspended") return null;
     }
 
-    return user;
+    // Fetch facilityType for the user's location so the UI can hide daycare for school-only branches
+    let facilityType: string = "school";
+    if (user.locationId) {
+      const [loc] = await db
+        .select({ facilityType: locations.facilityType })
+        .from(locations)
+        .where(eq(locations.id, user.locationId))
+        .limit(1);
+      facilityType = loc?.facilityType ?? "school";
+    }
+
+    return { ...user, facilityType };
   } catch {
     return null;
   }
