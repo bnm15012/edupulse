@@ -155,13 +155,14 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
-function SidebarContent({ role, board, facilityType, onNavClick }: { role: string | null | undefined; board?: string | null; facilityType?: string; onNavClick?: () => void }) {
+function SidebarContent({ role, board, facilityType, daycareEnabled, onNavClick }: { role: string | null | undefined; board?: string | null; facilityType?: string; daycareEnabled?: boolean; onNavClick?: () => void }) {
   const { pathname, search } = useLocation();
   const effectiveRole =
     role === "super_admin" && !pathname.startsWith("/super-admin")
       ? "school_admin"
       : role;
-  const hasDaycare = facilityType === "both" || facilityType === "daycare";
+  // Show Daycare nav only if: branch is daycare-capable AND the school's plan includes daycare
+  const hasDaycare = daycareEnabled && (facilityType === "both" || facilityType === "daycare");
   const nav = navForRole(effectiveRole, board).filter((item) => item.to !== "/daycare" || hasDaycare);
   const isImpersonating = role === "super_admin" && effectiveRole === "school_admin";
   const searchParams = new URLSearchParams(search);
@@ -236,16 +237,15 @@ function SidebarContent({ role, board, facilityType, onNavClick }: { role: strin
   );
 }
 
-function Sidebar({ role, board, facilityType }: { role: string | null | undefined; board?: string | null; facilityType?: string }) {
+function Sidebar({ role, board, facilityType, daycareEnabled }: { role: string | null | undefined; board?: string | null; facilityType?: string; daycareEnabled?: boolean }) {
   return (
-    /* Desktop sidebar — always visible, hidden on mobile (bottom tab bar used instead) */
     <aside className="hidden md:flex w-60 shrink-0 flex-col bg-slate-900 border-r border-slate-800">
-      <SidebarContent role={role} board={board} facilityType={facilityType} />
+      <SidebarContent role={role} board={board} facilityType={facilityType} daycareEnabled={daycareEnabled} />
     </aside>
   );
 }
 
-function BottomTabBar({ role, board, facilityType }: { role: string | null | undefined; board?: string | null; facilityType?: string }) {
+function BottomTabBar({ role, board, facilityType, daycareEnabled }: { role: string | null | undefined; board?: string | null; facilityType?: string; daycareEnabled?: boolean }) {
   const { pathname, search } = useLocation();
   const navigate = useNavigate();
   const [moreOpen, setMoreOpen] = useState(false);
@@ -253,7 +253,7 @@ function BottomTabBar({ role, board, facilityType }: { role: string | null | und
     role === "super_admin" && !pathname.startsWith("/super-admin")
       ? "school_admin"
       : role;
-  const hasDaycare = facilityType === "both" || facilityType === "daycare";
+  const hasDaycare = daycareEnabled && (facilityType === "both" || facilityType === "daycare");
   const nav = navForRole(effectiveRole, board).filter((item) => item.to !== "/daycare" || hasDaycare);
 
   const isExact = (to: string) =>
@@ -402,11 +402,14 @@ function AppShell() {
             if (parsed.schoolId === user.schoolId || user.role === "super_admin") needsReset = false;
           } catch { /* bad JSON — reset */ }
         }
+        const freshFields = { facilityType: (user as any).facilityType ?? "school", daycareEnabled: !!(user as any).daycareEnabled };
         if (needsReset) {
-          setTenant({ schoolId: user.schoolId, locationId: user.locationId, schoolName: "School", locationName: "Branch", facilityType: (user as any).facilityType ?? "school" });
+          setTenant({ schoolId: user.schoolId, locationId: user.locationId, schoolName: "School", locationName: "Branch", ...freshFields });
         } else {
-          // Always refresh facilityType in case branch was updated
-          setTenant({ ...JSON.parse(typeof window !== "undefined" ? localStorage.getItem("edupulse-tenant") ?? "{}" : "{}"), facilityType: (user as any).facilityType ?? "school" });
+          // Always refresh plan-gated fields in case branch type or plan changed
+          const stored = typeof window !== "undefined" ? localStorage.getItem("edupulse-tenant") : null;
+          const base = stored ? JSON.parse(stored) : {};
+          setTenant({ ...base, ...freshFields });
         }
       }
       setRole(user.role);
@@ -495,7 +498,7 @@ function AppShell() {
 
   return (
     <div className="h-screen flex overflow-hidden">
-      <Sidebar role={role} board={board} facilityType={tenant.facilityType} />
+      <Sidebar role={role} board={board} facilityType={tenant.facilityType} daycareEnabled={tenant.daycareEnabled} />
       <div className="flex-1 flex flex-col min-w-0 bg-slate-50 overflow-hidden">
         <TopBar role={role} />
         {/* Announcement banner — shown to all non-super-admin roles */}
@@ -508,7 +511,7 @@ function AppShell() {
           <Outlet />
         </main>
         {/* Mobile bottom tab bar */}
-        <BottomTabBar role={role} board={board} facilityType={tenant.facilityType} />
+        <BottomTabBar role={role} board={board} facilityType={tenant.facilityType} daycareEnabled={tenant.daycareEnabled} />
       </div>
     </div>
   );

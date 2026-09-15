@@ -404,7 +404,31 @@ export const getSession = createServerFn({ method: "GET" }).handler(async () => 
       facilityType = loc?.facilityType ?? "school";
     }
 
-    return { ...user, facilityType };
+    // Fetch daycareEnabled from the school's active plan
+    let daycareEnabled = false;
+    if (user.schoolId) {
+      const { subscriptions, plans } = await import("@/lib/db/schema");
+      const [sub] = await db
+        .select({ daycareEnabled: plans.daycareEnabled })
+        .from(subscriptions)
+        .innerJoin(plans, eq(subscriptions.planId, plans.id))
+        .where(and(eq(subscriptions.schoolId, user.schoolId), eq(subscriptions.status, "active")))
+        .limit(1);
+      // Also check trialing subscriptions
+      if (!sub) {
+        const [trial] = await db
+          .select({ daycareEnabled: plans.daycareEnabled })
+          .from(subscriptions)
+          .innerJoin(plans, eq(subscriptions.planId, plans.id))
+          .where(and(eq(subscriptions.schoolId, user.schoolId), eq(subscriptions.status, "trialing")))
+          .limit(1);
+        daycareEnabled = !!(trial?.daycareEnabled);
+      } else {
+        daycareEnabled = !!(sub?.daycareEnabled);
+      }
+    }
+
+    return { ...user, facilityType, daycareEnabled };
   } catch {
     return null;
   }
@@ -1417,6 +1441,7 @@ export const getPlans = createServerFn({ method: "GET" }).handler(async () => {
       cta: plans.cta,
       ctaHref: plans.ctaHref,
       status: plans.status,
+      daycareEnabled: plans.daycareEnabled,
     })
     .from(plans)
     .where(eq(plans.status, "active"))
@@ -1425,6 +1450,7 @@ export const getPlans = createServerFn({ method: "GET" }).handler(async () => {
   return rows.map((r) => ({
     ...r,
     featured: Boolean(r.featured),
+    daycareEnabled: Boolean(r.daycareEnabled),
     features: (() => {
       if (!r.features) return [];
       try {
@@ -1447,6 +1473,7 @@ const updatePlanSchema = z.object({
   ctaHref: z.string().trim().max(255).optional(),
   featured: z.boolean().optional(),
   status: z.enum(["active", "inactive"]).optional(),
+  daycareEnabled: z.boolean().optional(),
 });
 
 export const updatePlan = createServerFn({ method: "POST" })
@@ -1481,6 +1508,7 @@ export const updatePlan = createServerFn({ method: "POST" })
     if (data.ctaHref !== undefined) update.ctaHref = data.ctaHref;
     if (data.featured !== undefined) update.featured = data.featured ? 1 : 0;
     if (data.status !== undefined) update.status = data.status;
+    if (data.daycareEnabled !== undefined) update.daycareEnabled = data.daycareEnabled ? 1 : 0;
 
     if (Object.keys(update).length === 0) return { ok: true };
 
@@ -2043,6 +2071,22 @@ async function assertCanOperateForUser() {
   const [user] = await db.select({ role: users.role, schoolId: users.schoolId }).from(users).where(eq(users.id, userId)).limit(1);
   if (!user || user.role === "super_admin" || user.role === "parent") return; // super admin and parents are never blocked
   await assertCanOperate(Number(user.schoolId ?? 0));
+}
+
+// Throws if the school's active subscription plan does not include the daycare add-on.
+async function assertDaycareEnabled(schoolId: number) {
+  const { db } = await import("@/lib/db");
+  const { subscriptions, plans } = await import("@/lib/db/schema");
+  const [row] = await db
+    .select({ daycareEnabled: plans.daycareEnabled })
+    .from(subscriptions)
+    .innerJoin(plans, eq(subscriptions.planId, plans.id))
+    .where(and(eq(subscriptions.schoolId, schoolId), inArray(subscriptions.status, ["active", "trialing"])))
+    .orderBy(subscriptions.id) // take earliest if multiple
+    .limit(1);
+  if (!row || !row.daycareEnabled) {
+    throw new Error("Daycare features are not included in your current plan. Please upgrade to access daycare.");
+  }
 }
 
 async function requireAuth(requestedSchoolId?: number, requestedLocationId?: number) {
@@ -4464,7 +4508,10 @@ const addFeeStructureSchema = z.object({
 export const addFeeStructure = createServerFn({ method: "POST" })
   .validator((i: unknown) => addFeeStructureSchema.parse(i))
   .handler(async ({ data }) => {
-    await requireAuth(data.schoolId, data.locationId);
+    const user = await requireAuth(data.schoolId, data.locationId);
+    if (user.role !== "super_admin" && (data.feeType === "daycare_hourly" || data.feeType === "daycare_monthly")) {
+      await assertDaycareEnabled(data.schoolId);
+    }
     await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
     const { feeStructures } = await import("@/lib/db/schema");
@@ -8499,6 +8546,7 @@ export const listDaycareSessions = createServerFn({ method: "GET" })
     const user = await requireAuth(data.schoolId, data.locationId);
     const allowed = ["super_admin", "school_admin", "location_admin", "teacher", "staff", "receptionist"];
     if (!allowed.includes(user.role ?? "")) throw new Error("Not authorized");
+    if (user.role !== "super_admin") await assertDaycareEnabled(data.schoolId);
     await assertCanOperateForUser();
 
     const { db } = await import("@/lib/db");
@@ -8589,6 +8637,7 @@ export const saveDaycareSessions = createServerFn({ method: "POST" })
     const user = await requireAuth(data.schoolId, data.locationId);
     const allowed = ["super_admin", "school_admin", "location_admin", "teacher", "staff", "receptionist"];
     if (!allowed.includes(user.role ?? "")) throw new Error("Not authorized");
+    if (user.role !== "super_admin") await assertDaycareEnabled(data.schoolId);
     await assertCanOperateForUser();
 
     const { db } = await import("@/lib/db");

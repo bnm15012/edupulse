@@ -5,7 +5,8 @@ export type Tenant = {
   schoolName: string;
   locationId: number;
   locationName: string;
-  facilityType?: string; // "school" | "daycare" | "both"
+  facilityType?: string;  // "school" | "daycare" | "both"
+  daycareEnabled?: boolean; // true if the school's active plan includes daycare
 };
 
 const defaultTenant: Tenant = {
@@ -14,6 +15,7 @@ const defaultTenant: Tenant = {
   locationId: 1,
   locationName: "Main Branch",
   facilityType: "school",
+  daycareEnabled: false,
 };
 
 const TenantContext = createContext<{

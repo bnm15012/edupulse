@@ -592,6 +592,7 @@ export const plans = mysqlTable("plans", {
   status: mysqlEnum("status", ["active", "inactive"]).default("active"),
   cta: varchar("cta", { length: 100 }).default("Get started"),
   ctaHref: varchar("cta_href", { length: 255 }).default("/signup"),
+  daycareEnabled: int("daycare_enabled").default(0), // 1 = plan includes daycare add-on
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 });
