@@ -3964,6 +3964,9 @@ const generateStudentInvoiceSchema = z.object({
   locationId: z.number(),
   studentId: z.number(),
   month: z.string().regex(/^\d{4}-\d{2}$/), // "2025-04"
+  // Optional: override date range for partial-month billing (e.g. mid-month exit)
+  fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 function isFeeApplicableForMonth(frequency: string, month: string, skipOneTime: boolean) {
@@ -4066,8 +4069,10 @@ async function generateStudentInvoiceCore(
 
   const [y, m] = data.month.split("-").map(Number);
   const lastDay = new Date(y, m, 0).getDate();
-  const startDate = `${data.month}-01`;
-  const endDate = `${data.month}-${String(lastDay).padStart(2, "0")}`;
+  // Allow partial-month range (e.g. mid-month exit): fromDate/toDate override the full month
+  const startDate = data.fromDate ?? `${data.month}-01`;
+  const endDate = data.toDate ?? `${data.month}-${String(lastDay).padStart(2, "0")}`;
+  const isPartialMonth = !!(data.fromDate || data.toDate);
 
   const sessions = await db
     .select({
@@ -4116,6 +4121,13 @@ async function generateStudentInvoiceCore(
   });
   const totalHours = sessionDetails.reduce((sum, s) => sum + s.hours, 0);
 
+  // For partial-month billing, pro-rate flat (non-hourly) fees by days covered
+  const totalDaysInMonth = new Date(y, m, 0).getDate();
+  const fromD = new Date(startDate);
+  const toD = new Date(endDate);
+  const daysCovered = Math.round((toD.getTime() - fromD.getTime()) / 86400000) + 1;
+  const proRateFactor = isPartialMonth ? +(daysCovered / totalDaysInMonth).toFixed(4) : 1;
+
   const items: any[] = [];
   let total = 0;
   for (const f of applicableFees) {
@@ -4125,13 +4137,16 @@ async function generateStudentInvoiceCore(
       items.push({ feeStructureId: f.id, name: f.name, feeType: f.feeType, hours: +totalHours.toFixed(2), rate, amount });
       total += amount;
     } else {
-      items.push({ feeStructureId: f.id, name: f.name, feeType: f.feeType, amount: rate });
-      total += rate;
+      // Pro-rate flat fees for partial months
+      const amount = +(rate * proRateFactor).toFixed(2);
+      const label = isPartialMonth ? `${f.name} (${startDate} to ${endDate}, ${daysCovered}/${totalDaysInMonth} days)` : f.name;
+      items.push({ feeStructureId: f.id, name: label, feeType: f.feeType, amount });
+      total += amount;
     }
   }
 
   const dueDay = applicableFees[0]?.dueDay ?? 1;
-  const dueDate = `${data.month}-${String(dueDay).padStart(2, "0")}`;
+  const dueDate = isPartialMonth ? endDate : `${data.month}-${String(dueDay).padStart(2, "0")}`;
 
   const [res] = await db.insert(invoices).values({
     schoolId: data.schoolId,
@@ -4141,7 +4156,7 @@ async function generateStudentInvoiceCore(
     dueDate: new Date(dueDate) as any,
     status,
     generatedMonth: data.month,
-    details: JSON.stringify({ items, daycareSessions: sessionDetails }),
+    details: JSON.stringify({ items, daycareSessions: sessionDetails, fromDate: startDate, toDate: endDate, isPartialMonth }),
   });
   return { invoiceId: Number((res as any).insertId), isExisting: false };
 }

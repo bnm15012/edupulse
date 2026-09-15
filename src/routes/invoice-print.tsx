@@ -54,7 +54,10 @@ function InvoicePrint() {
           </div>
           <div className="text-right">
             <p className="text-sm font-bold text-slate-700">Invoice #{invoice.id}</p>
-            <p className="text-sm text-slate-500">Month: {invoice.month}</p>
+            {invoice.details?.isPartialMonth
+              ? <p className="text-sm text-slate-500">{invoice.details.fromDate} to {invoice.details.toDate} <span className="text-xs text-amber-600 font-semibold">(Partial month)</span></p>
+              : <p className="text-sm text-slate-500">Month: {invoice.month}</p>
+            }
             <p className="text-xs text-slate-400">Generated: {new Date(invoice.createdAt).toLocaleDateString("en-IN")}</p>
             <span className={`inline-block mt-2 px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide ${invoice.status === "paid" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{invoice.status}</span>
           </div>

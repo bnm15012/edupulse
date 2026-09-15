@@ -6,7 +6,7 @@ import {
   Pencil, Save, XCircle, CheckCircle2, Clock, Ban, Layers, Trash2,
   Banknote, Send, CreditCard, Loader2, RefreshCw,
 } from "lucide-react";
-import { listInvoices, addInvoice, updateInvoice, listStudents, listFeeStructures, addFeeStructure, updateFeeStructure, archiveFeeStructure, listClassesForSchool, runFeeAutomation, markInvoicePaid, sendInvoice, createRazorpayOrder, verifyRazorpayPayment, getSession } from "@/lib/auth";
+import { listInvoices, addInvoice, updateInvoice, listStudents, listFeeStructures, addFeeStructure, updateFeeStructure, archiveFeeStructure, listClassesForSchool, runFeeAutomation, markInvoicePaid, sendInvoice, createRazorpayOrder, verifyRazorpayPayment, getSession, generateStudentInvoice } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { useToast } from "@/lib/toast";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -97,6 +97,80 @@ function AddInvoiceModal({ onClose, onSaved, schoolId, locationId, students }: {
             <button type="button" onClick={onClose} className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-medium transition">Cancel</button>
             <button type="submit" disabled={saving} className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-bold transition">
               {saving ? "Creating…" : "Create Invoice"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Generate Invoice Modal (fee-based, with optional partial-month range) ──
+
+function GenerateInvoiceModal({ onClose, onSaved, schoolId, locationId, students }: {
+  onClose: () => void; onSaved: () => void; schoolId: number; locationId: number; students: StudentOption[];
+}) {
+  const generateFn = useServerFn(generateStudentInvoice);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const today = new Date().toLocaleDateString("en-CA");
+  const [f, setF] = useState({ studentId: "", month: today.slice(0, 7), partial: false, fromDate: "", toDate: "" });
+  const set = (k: string, v: any) => setF((p) => ({ ...p, [k]: v }));
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault(); setSaving(true); setError("");
+    try {
+      const payload: any = { schoolId, locationId, studentId: parseInt(f.studentId), month: f.month };
+      if (f.partial && f.fromDate) payload.fromDate = f.fromDate;
+      if (f.partial && f.toDate) payload.toDate = f.toDate;
+      await generateFn({ data: payload });
+      onSaved();
+    } catch (err: any) { setError(err?.message ?? "Failed"); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white rounded-t-2xl">
+          <h2 className="text-lg font-bold text-slate-900">Generate Invoice</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition"><X className="w-5 h-5" /></button>
+        </div>
+        <form onSubmit={submit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1.5">Student *</label>
+            <select value={f.studentId} onChange={(e) => set("studentId", e.target.value)} className={`${inputCls} bg-white`} required>
+              <option value="">Select a student</option>
+              {students.map((s) => <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1.5">Month *</label>
+            <input type="month" value={f.month} onChange={(e) => set("month", e.target.value)} className={inputCls} required />
+          </div>
+          <label className="flex items-center gap-2.5 cursor-pointer">
+            <input type="checkbox" checked={f.partial} onChange={(e) => set("partial", e.target.checked)} className="rounded border-slate-300" />
+            <span className="text-sm font-medium text-slate-700">Partial month (mid-month exit / join)</span>
+          </label>
+          {f.partial && (
+            <div className="grid grid-cols-2 gap-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">From date</label>
+                <input type="date" value={f.fromDate} onChange={(e) => set("fromDate", e.target.value)} className={inputCls} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">To date</label>
+                <input type="date" value={f.toDate} onChange={(e) => set("toDate", e.target.value)} className={inputCls} />
+              </div>
+              <p className="col-span-2 text-xs text-amber-700">Flat fees will be pro-rated. Daycare hours will be summed for the selected range only.</p>
+            </div>
+          )}
+          {error && <div className="flex items-center gap-2.5 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm"><AlertCircle className="w-4 h-4 shrink-0" />{error}</div>}
+          <div className="flex justify-end gap-3 pt-1">
+            <button type="button" onClick={onClose} className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-medium transition">Cancel</button>
+            <button type="submit" disabled={saving} className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-bold transition">
+              {saving ? "Generating…" : "Generate"}
             </button>
           </div>
         </form>
@@ -599,6 +673,7 @@ function Fees() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterClass, setFilterClass] = useState<number | "all">("all");
   const [addOpen, setAddOpen] = useState(false);
+  const [generateOpen, setGenerateOpen] = useState(false);
   const [selected, setSelected] = useState<Invoice | null>(null);
   const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [confirmInvoice, setConfirmInvoice] = useState<Invoice | null>(null);
@@ -728,8 +803,11 @@ function Fees() {
               {automating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
               <span>Run Automation</span>
             </button>
-            <button onClick={() => setAddOpen(true)} className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition shadow-sm">
-              <Plus className="w-4 h-4" /> <span>Create Invoice</span>
+            <button onClick={() => setGenerateOpen(true)} className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition shadow-sm">
+              <DollarSign className="w-4 h-4" /> <span>Generate Invoice</span>
+            </button>
+            <button onClick={() => setAddOpen(true)} className="inline-flex items-center gap-2 px-4 py-2.5 border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-semibold rounded-xl transition">
+              <Plus className="w-4 h-4" /> <span>Create Manual</span>
             </button>
           </div>
         )}
@@ -933,6 +1011,7 @@ function Fees() {
       )}
 
       {addOpen && <AddInvoiceModal onClose={() => setAddOpen(false)} onSaved={() => { setAddOpen(false); load(); toast("Invoice created", "success"); }} schoolId={tenant.schoolId} locationId={tenant.locationId} students={students} />}
+      {generateOpen && <GenerateInvoiceModal onClose={() => setGenerateOpen(false)} onSaved={() => { setGenerateOpen(false); load(); toast("Invoice generated", "success"); }} schoolId={tenant.schoolId} locationId={tenant.locationId} students={students} />}
       {selected && (
         <InvoiceDrawer
           invoice={selected}
