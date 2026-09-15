@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import {
   X, Plus, Search, AlertCircle, ChevronRight, DollarSign,
   Pencil, Save, XCircle, CheckCircle2, Clock, Ban, Layers, Trash2,
-  Banknote, Send, CreditCard, Loader2, RefreshCw,
+  Banknote, Send, CreditCard, Loader2, RefreshCw, FileText,
 } from "lucide-react";
 import { listInvoices, addInvoice, updateInvoice, listStudents, listFeeStructures, addFeeStructure, updateFeeStructure, archiveFeeStructure, listClassesForSchool, runFeeAutomation, markInvoicePaid, sendInvoice, createRazorpayOrder, verifyRazorpayPayment, getSession, generateStudentInvoice } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
@@ -231,6 +231,15 @@ function InvoiceDrawer({ invoice: initial, onClose, onUpdated }: {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <a
+                href={`/invoice-print?invoiceId=${inv.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 text-white text-xs font-semibold rounded-lg transition"
+                title="View / Print invoice"
+              >
+                <FileText className="w-3.5 h-3.5" /> View
+              </a>
               {!editing && (
                 <button onClick={() => { setEf({ amount: inv.amount, dueDate: inv.dueDate ?? "", status: inv.status }); setEditing(true); }}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 text-white text-xs font-semibold rounded-lg transition">
@@ -984,6 +993,16 @@ function Fees() {
                                 </button>
                               )}
                             </>)}
+                            <a
+                              href={`/invoice-print?invoiceId=${inv.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition"
+                              title="View / Print invoice"
+                            >
+                              <FileText className="w-3.5 h-3.5" />
+                            </a>
                             <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-500 transition ml-1" />
                           </div>
                         </td>
