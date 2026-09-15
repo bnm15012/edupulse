@@ -209,9 +209,9 @@ function InvoiceViewModal({ invoiceId, onClose }: { invoiceId: number; onClose: 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-slate-100 print:bg-white overflow-y-auto">
+    <div className="flex flex-col min-h-0">
       {/* Top bar */}
-      <div className="no-print sticky top-0 z-10 flex items-center justify-between px-6 py-3 bg-white border-b border-slate-200 shadow-sm print:hidden">
+      <div className="no-print flex items-center justify-between mb-4 print:hidden">
         <button onClick={onClose} className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition">
           <ArrowLeft className="w-4 h-4" /> Back to Fees
         </button>
@@ -233,8 +233,8 @@ function InvoiceViewModal({ invoiceId, onClose }: { invoiceId: number; onClose: 
         const { invoice, student, parents, school, location } = data;
         const branchAddress = [location?.address, [location?.city, location?.state].filter(Boolean).join(", "), [location?.pincode, location?.phone].filter(Boolean).join(" · ")].filter(Boolean).join(" · ") || school?.address;
         return (
-          <div className="flex-1 py-8 px-4 print:py-0 print:px-0">
-            <div ref={cardRef} className="max-w-4xl mx-auto bg-white p-10 shadow-lg rounded-2xl print:shadow-none print:rounded-none print:p-0">
+          <div className="print:py-0 print:px-0">
+            <div ref={cardRef} className="bg-white p-8 shadow rounded-2xl print:shadow-none print:rounded-none print:p-0">
 
               {/* Header */}
               <div className="flex items-start justify-between border-b-2 border-slate-100 pb-6 mb-6">
@@ -940,6 +940,10 @@ function Fees() {
   const statusKeys = ["draft", "sent", "paid", "overdue", "cancelled"];
   const counts = invoices.reduce((acc, i) => { acc[i.status] = (acc[i.status] ?? 0) + 1; return acc; }, {} as Record<string, number>);
 
+  if (viewingInvoiceId) {
+    return <InvoiceViewModal invoiceId={viewingInvoiceId} onClose={() => setViewingInvoiceId(null)} />;
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -1174,10 +1178,6 @@ function Fees() {
           onView={(id) => { setSelected(null); setViewingInvoiceId(id); }}
         />
       )}
-      {viewingInvoiceId && (
-        <InvoiceViewModal invoiceId={viewingInvoiceId} onClose={() => setViewingInvoiceId(null)} />
-      )}
-
       <ConfirmDialog
         open={confirmInvoice !== null}
         title="Cancel invoice?"
