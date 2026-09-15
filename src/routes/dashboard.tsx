@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Users, UserPlus, DollarSign, Briefcase, DoorOpen, ArrowRight, TrendingUp, AlertCircle, CalendarCheck, CheckCircle2, XCircle, Cake, Calendar } from "lucide-react";
 import { useTenant } from "@/lib/tenant";
+import { fmtDate } from "@/lib/utils";
 import { getDashboardStats, getAttendanceSummary, getUpcomingBirthdays, getUpcomingHolidays } from "@/lib/auth";
 
 export const Route = createFileRoute("/dashboard")({
