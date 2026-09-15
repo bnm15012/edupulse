@@ -74,6 +74,7 @@ function Signup() {
   const [schoolState, setSchoolState] = useState("");
   const [schoolPincode, setSchoolPincode] = useState("");
   const [schoolCountry] = useState("India");
+  const [facilityType, setFacilityType] = useState<"school" | "daycare" | "both">("both");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -101,7 +102,7 @@ function Signup() {
     setLoading(true);
     try {
       const res = (await signupFn({
-        data: { schoolName, schoolEmail, schoolPhone, schoolAddress, schoolCity, schoolState, schoolPincode, schoolCountry, fullName, email, password },
+        data: { schoolName, schoolEmail, schoolPhone, schoolAddress, schoolCity, schoolState, schoolPincode, schoolCountry, facilityType, fullName, email, password },
       })) as { confirmed: boolean; token: string | null };
       if (res.confirmed && res.token) {
         // Dev: auto-login and redirect
@@ -272,6 +273,15 @@ function Signup() {
                     <label className={labelCls}>Pincode</label>
                     <input value={schoolPincode} onChange={(e) => setSchoolPincode(e.target.value)} placeholder="400001" className={inputCls} required />
                   </div>
+                </div>
+
+                <div>
+                  <label className={labelCls}>Branch type</label>
+                  <select value={facilityType} onChange={(e) => setFacilityType(e.target.value as any)} className={inputCls}>
+                    <option value="school">School only</option>
+                    <option value="daycare">Daycare only</option>
+                    <option value="both">School + Daycare</option>
+                  </select>
                 </div>
 
                 <button

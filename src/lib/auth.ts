@@ -129,6 +129,7 @@ const signupSchema = z.object({
   schoolState: z.string().trim().min(1).max(100),
   schoolPincode: z.string().trim().min(1).max(20),
   schoolCountry: z.string().trim().max(100).default("India"),
+  facilityType: z.enum(["school", "daycare", "both"]).default("school"),
   fullName: z.string().trim().min(2).max(255),
   email: z.string().trim().email().max(255),
   password: z.string().min(8).max(100),
@@ -175,6 +176,7 @@ export const signup = createServerFn({ method: "POST" })
         state: data.schoolState,
         pincode: data.schoolPincode,
         phone: data.schoolPhone,
+        facilityType: data.facilityType,
         status: "active",
       });
       const locationId = Number((locationResult as any).insertId);
@@ -632,7 +634,7 @@ export const getTenantOptions = createServerFn({ method: "GET" })
       const selectedSchoolId = data.schoolId ?? allSchools[0]?.id;
       const locs = selectedSchoolId
         ? await db
-            .select({ id: locations.id, name: locations.name })
+            .select({ id: locations.id, name: locations.name, facilityType: locations.facilityType })
             .from(locations)
             .where(eq(locations.schoolId, selectedSchoolId))
         : [];
@@ -646,7 +648,7 @@ export const getTenantOptions = createServerFn({ method: "GET" })
       .where(eq(schools.id, selectedSchoolId))
       .limit(1);
     const locs = await db
-      .select({ id: locations.id, name: locations.name })
+      .select({ id: locations.id, name: locations.name, facilityType: locations.facilityType })
       .from(locations)
       .where(eq(locations.schoolId, selectedSchoolId));
 
@@ -1789,6 +1791,36 @@ export const getSuperAdminSchoolDetail = createServerFn({ method: "GET" })
     };
   });
 
+const updateLocationSchema = z.object({
+  locationId: z.number(),
+  facilityType: z.enum(["school", "daycare", "both"]).optional(),
+  name: z.string().trim().min(1).max(255).optional(),
+  phone: z.string().trim().max(50).optional(),
+  status: z.enum(["active", "inactive"]).optional(),
+});
+
+export const updateLocation = createServerFn({ method: "POST" })
+  .validator((input: unknown) => updateLocationSchema.parse(input))
+  .handler(async ({ data }) => {
+    const user = await requireAuth();
+    if (!["super_admin", "school_admin"].includes(user.role ?? "")) throw new Error("Not authorized");
+    await assertCanOperateForUser();
+    const { db } = await import("@/lib/db");
+    const { locations } = await import("@/lib/db/schema");
+
+    const [loc] = await db.select({ schoolId: locations.schoolId }).from(locations).where(eq(locations.id, data.locationId)).limit(1);
+    if (!loc || loc.schoolId !== user.schoolId) throw new Error("Not authorized");
+
+    const setObj: any = {};
+    if (data.facilityType) setObj.facilityType = data.facilityType;
+    if (data.name) setObj.name = data.name;
+    if (data.phone !== undefined) setObj.phone = data.phone;
+    if (data.status) setObj.status = data.status;
+
+    await db.update(locations).set(setObj).where(eq(locations.id, data.locationId));
+    return { ok: true };
+  });
+
 // ── Super Admin: update school subscription (plan, amount, status) ────────────
 const updateSchoolSubscriptionSchema = z.object({
   schoolId: z.number(),
@@ -2837,6 +2869,7 @@ const addBranchSchema = z.object({
   pincode: z.string().trim().max(20).optional(),
   phone: z.string().trim().max(50).optional(),
   capacity: z.number().int().optional(),
+  facilityType: z.enum(["school", "daycare", "both"]).default("school"),
 });
 
 export const addBranch = createServerFn({ method: "POST" })
@@ -2878,6 +2911,7 @@ export const addBranch = createServerFn({ method: "POST" })
       pincode: data.pincode || null,
       phone: data.phone || null,
       capacity: data.capacity || null,
+      facilityType: data.facilityType,
       status: "active",
     });
 
@@ -4078,6 +4112,7 @@ const updateBranchSchema = z.object({
   phone: z.string().trim().max(50).optional(),
   capacity: z.number().int().optional(),
   status: z.enum(["active", "inactive"]).optional(),
+  facilityType: z.enum(["school", "daycare", "both"]).optional(),
 });
 
 export const updateBranch = createServerFn({ method: "POST" })
@@ -4108,6 +4143,7 @@ export const updateBranch = createServerFn({ method: "POST" })
       phone: data.phone || null,
       capacity: data.capacity ?? null,
       status: data.status ?? undefined,
+      facilityType: data.facilityType ?? undefined,
     }).where(and(eq(locations.id, data.locationId), eq(locations.schoolId, targetSchoolId)));
     return { ok: true };
   });

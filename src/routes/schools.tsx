@@ -20,6 +20,7 @@ type Location = {
   id: number; name: string; address: string | null; city: string | null;
   state: string | null; pincode: string | null; phone: string | null;
   capacity: number | null; status: string; studentCount: number; staffCount: number;
+  facilityType: "school" | "daycare" | "both";
 };
 type School = {
   id: number; name: string; email: string | null; phone: string | null;
@@ -36,7 +37,10 @@ function AddBranchModal({ schoolId, onClose, onSaved }: { schoolId: number; onCl
   const addFn = useServerFn(addBranch);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [f, setF] = useState({ name: "", address: "", city: "", state: "", pincode: "", phone: "", capacity: "" });
+  const [f, setF] = useState({
+    name: "", address: "", city: "", state: "", pincode: "", phone: "", capacity: "",
+    facilityType: "school" as "school" | "daycare" | "both",
+  });
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }));
 
   const submit = async (e: React.FormEvent) => {
@@ -53,6 +57,7 @@ function AddBranchModal({ schoolId, onClose, onSaved }: { schoolId: number; onCl
           pincode: f.pincode || undefined,
           phone: f.phone || undefined,
           capacity: f.capacity ? parseInt(f.capacity) : undefined,
+          facilityType: f.facilityType,
         },
       });
       onSaved();
@@ -107,6 +112,14 @@ function AddBranchModal({ schoolId, onClose, onSaved }: { schoolId: number; onCl
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5">Pincode</label>
                 <input value={f.pincode} onChange={(e) => set("pincode", e.target.value)} placeholder="400001" className={inputCls} />
               </div>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Branch type</label>
+              <select value={f.facilityType} onChange={(e) => setF((p) => ({ ...p, facilityType: e.target.value as any }))} className={inputCls}>
+                <option value="school">School only</option>
+                <option value="daycare">Daycare only</option>
+                <option value="both">School + Daycare</option>
+              </select>
             </div>
 
             {error && !parsePlanLimitError(error) && (
@@ -227,13 +240,14 @@ function EditBranchModal({ schoolId, branch, onClose, onSaved }: { schoolId: num
     state: branch.state ?? "", pincode: branch.pincode ?? "", phone: branch.phone ?? "",
     capacity: branch.capacity ? String(branch.capacity) : "",
     status: (branch.status ?? "active") as "active" | "inactive",
+    facilityType: (branch.facilityType ?? "school") as "school" | "daycare" | "both",
   });
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }));
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true); setError("");
     try {
-      await updateFn({ data: { schoolId, locationId: branch.id, name: f.name, address: f.address || undefined, city: f.city || undefined, state: f.state || undefined, pincode: f.pincode || undefined, phone: f.phone || undefined, capacity: f.capacity ? parseInt(f.capacity) : undefined, status: f.status } });
+      await updateFn({ data: { schoolId, locationId: branch.id, name: f.name, address: f.address || undefined, city: f.city || undefined, state: f.state || undefined, pincode: f.pincode || undefined, phone: f.phone || undefined, capacity: f.capacity ? parseInt(f.capacity) : undefined, status: f.status, facilityType: f.facilityType } });
       onSaved();
     } catch (err: any) { setError(err?.message ?? "Failed"); }
     finally { setSaving(false); }
@@ -281,6 +295,14 @@ function EditBranchModal({ schoolId, branch, onClose, onSaved }: { schoolId: num
               <label className="block text-xs font-semibold text-slate-600 mb-1.5">Pincode</label>
               <input value={f.pincode} onChange={(e) => set("pincode", e.target.value)} className={inputCls} />
             </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1.5">Branch type</label>
+            <select value={f.facilityType} onChange={(e) => setF((p) => ({ ...p, facilityType: e.target.value as any }))} className={`${inputCls} bg-white`}>
+              <option value="school">School only</option>
+              <option value="daycare">Daycare only</option>
+              <option value="both">School + Daycare</option>
+            </select>
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1.5">Status</label>
@@ -741,6 +763,7 @@ function SchoolsPage() {
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 <th className="px-5 py-3.5">Branch name</th>
+                <th className="px-5 py-3.5">Type</th>
                 <th className="px-5 py-3.5">City / State</th>
                 <th className="px-5 py-3.5">Phone</th>
                 <th className="px-5 py-3.5">Capacity</th>
@@ -763,6 +786,11 @@ function SchoolsPage() {
                         {l.address && <p className="text-xs text-slate-400 truncate max-w-[180px]">{l.address}</p>}
                       </div>
                     </div>
+                  </td>
+                  <td className="px-5 py-4">
+                    <span className="px-2 py-1 text-xs font-semibold rounded-full border bg-slate-50 text-slate-600 border-slate-200 capitalize">
+                      {l.facilityType === "both" ? "School + Daycare" : l.facilityType}
+                    </span>
                   </td>
                   <td className="px-5 py-4 text-slate-500">
                     {[l.city, l.state].filter(Boolean).join(", ") || "—"}
