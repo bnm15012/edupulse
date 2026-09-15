@@ -24,7 +24,7 @@ export const Route = createFileRoute("/attendance")({
 // ── Types ──────────────────────────────────────────────────────────────────
 type AttendanceStatus = "present" | "absent" | "half_day" | "leave";
 type ClassOption = { id: number; name: string; ageGroup: string | null; startTime: string | null; endTime: string | null };
-type StudentRow = { id: number; firstName: string; lastName: string; status?: AttendanceStatus };
+type StudentRow = { id: number; firstName: string; lastName: string; status?: AttendanceStatus; inTime?: string; outTime?: string };
 type HistoryRow = { id: number; date: string; status: AttendanceStatus; notes: string | null; studentId: number; firstName: string; lastName: string; classId: number; className: string };
 
 const STATUS_CONFIG: Record<AttendanceStatus, { label: string; color: string; icon: React.ReactNode }> = {
@@ -53,11 +53,14 @@ function MarkTab({ classes, schoolId, locationId }: { classes: ClassOption[]; sc
   const [selectedClass, setSelectedClass] = useState<ClassOption | null>(classes[0] ?? null);
   const [date, setDate]         = useState(today());
   const [students, setStudents] = useState<StudentRow[]>([]);
+  const [facilityType, setFacilityType] = useState("school");
   const [loading, setLoading]   = useState(false);
   const [saving, setSaving]     = useState(false);
   const [alreadyMarked, setAlreadyMarked] = useState(false);
   const isMounted = useRef(true);
   useEffect(() => () => { isMounted.current = false; }, []);
+
+  const isDaycare = facilityType === "both" || facilityType === "daycare";
 
   const load = async () => {
     if (!selectedClass) return;
@@ -68,13 +71,16 @@ function MarkTab({ classes, schoolId, locationId }: { classes: ClassOption[]; sc
         getAttendanceFn({ data: { schoolId, locationId, classId: selectedClass.id, date } }),
       ]);
       const classStudents = (allStudents as any[]).filter((s: any) => s.currentClassId === selectedClass.id && s.status === "enrolled");
-      const { sessionTaken, records } = existing as any;
-      const existingMap = new Map((records as any[]).map((e: any) => [e.studentId, e.status as AttendanceStatus]));
+      const { sessionTaken, records, facilityType: ft } = existing as any;
+      const existingMap = new Map((records as any[]).map((e: any) => [e.studentId, { status: e.status as AttendanceStatus, inTime: e.inTime ?? "", outTime: e.outTime ?? "" }]));
       if (isMounted.current) {
+        setFacilityType(ft ?? "school");
         setAlreadyMarked(sessionTaken);
         setStudents(classStudents.map((s: any) => ({
           id: s.id, firstName: s.firstName, lastName: s.lastName,
-          status: existingMap.get(s.id) ?? "present",
+          status: existingMap.get(s.id)?.status ?? "present",
+          inTime: existingMap.get(s.id)?.inTime ?? "",
+          outTime: existingMap.get(s.id)?.outTime ?? "",
         })));
       }
     } catch (e: any) {
@@ -89,6 +95,9 @@ function MarkTab({ classes, schoolId, locationId }: { classes: ClassOption[]; sc
   const setStatus = (studentId: number, status: AttendanceStatus) =>
     setStudents((prev) => prev.map((s) => s.id === studentId ? { ...s, status } : s));
 
+  const setTime = (studentId: number, field: "inTime" | "outTime", val: string) =>
+    setStudents((prev) => prev.map((s) => s.id === studentId ? { ...s, [field]: val } : s));
+
   const markAll = (status: AttendanceStatus) =>
     setStudents((prev) => prev.map((s) => ({ ...s, status })));
 
@@ -99,7 +108,13 @@ function MarkTab({ classes, schoolId, locationId }: { classes: ClassOption[]; sc
       await markAttendanceFn({
         data: {
           schoolId, locationId, classId: selectedClass.id, date,
-          records: students.map((s) => ({ studentId: s.id, status: s.status! })),
+          withDaycare: isDaycare,
+          records: students.map((s) => ({
+            studentId: s.id,
+            status: s.status!,
+            inTime: s.inTime || undefined,
+            outTime: s.outTime || undefined,
+          })),
         },
       });
       setAlreadyMarked(true);
@@ -216,12 +231,20 @@ function MarkTab({ classes, schoolId, locationId }: { classes: ClassOption[]; sc
             <p className="text-sm text-slate-400">No enrolled students in this class</p>
           </div>
         ) : (
+          <>
+          {isDaycare && (
+            <div className="flex items-center gap-2 px-4 sm:px-6 py-2 bg-violet-50 border-b border-violet-100">
+              <span className="text-xs font-semibold text-violet-600">School + Daycare branch</span>
+              <span className="text-xs text-violet-400">— Enter in/out times for daycare billing (optional per student)</span>
+            </div>
+          )}
           <div className="divide-y divide-slate-100">
             {students.map((s, idx) => {
               const initials = `${s.firstName?.[0] ?? ""}${s.lastName?.[0] ?? ""}`.toUpperCase();
+              const isAbsent = s.status === "absent" || s.status === "leave";
               return (
                 <div key={s.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 sm:px-6 py-3.5 hover:bg-slate-50 transition">
-                  <div className="flex items-center gap-3 w-full sm:w-auto">
+                  <div className="flex items-center gap-3 w-full sm:w-auto sm:min-w-[200px]">
                     <span className="text-xs text-slate-300 w-5 text-right font-mono">{idx + 1}</span>
                     <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0">
                       {initials}
@@ -247,10 +270,35 @@ function MarkTab({ classes, schoolId, locationId }: { classes: ClassOption[]; sc
                       </button>
                     ))}
                   </div>
+                  {/* Daycare in/out times — only for daycare-enabled branches */}
+                  {isDaycare && (
+                    <div className="flex items-center gap-2 ml-auto">
+                      <input
+                        type="time"
+                        value={s.inTime ?? ""}
+                        disabled={isAbsent}
+                        onChange={(e) => setTime(s.id, "inTime", e.target.value)}
+                        className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-700 focus:outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-200 disabled:opacity-40 disabled:bg-slate-50 w-28"
+                        placeholder="In"
+                        title="Arrival time"
+                      />
+                      <span className="text-slate-300 text-xs">→</span>
+                      <input
+                        type="time"
+                        value={s.outTime ?? ""}
+                        disabled={isAbsent}
+                        onChange={(e) => setTime(s.id, "outTime", e.target.value)}
+                        className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-700 focus:outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-200 disabled:opacity-40 disabled:bg-slate-50 w-28"
+                        placeholder="Out"
+                        title="Departure time"
+                      />
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
+          </>
         )}
       </div>
     </div>

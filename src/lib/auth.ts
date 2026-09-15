@@ -4739,10 +4739,13 @@ const markStudentAttendanceSchema = z.object({
   classId:    z.number(),
   date:       z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   markedBy:   z.number().optional(),
+  withDaycare: z.boolean().optional(), // true for school+daycare / daycare branches
   records: z.array(z.object({
     studentId: z.number(),
     status:    z.enum(["present", "absent", "half_day", "leave"]),
     notes:     z.string().max(500).optional(),
+    inTime:    z.string().optional(),  // e.g. "08:00"
+    outTime:   z.string().optional(),  // e.g. "15:30"
   })).min(1),
 });
 
@@ -4793,6 +4796,35 @@ export const markStudentAttendance = createServerFn({ method: "POST" })
       }))
     );
 
+    // 4. If this is a daycare-enabled branch, upsert daycare_sessions alongside attendance
+    if (data.withDaycare) {
+      const { daycareSessions } = await import("@/lib/db/schema");
+      for (const r of data.records) {
+        const isPresent = r.status === "present" || r.status === "half_day";
+        // Delete existing session for this student+date first (clean upsert)
+        await db.delete(daycareSessions).where(
+          and(
+            eq(daycareSessions.schoolId, data.schoolId),
+            eq(daycareSessions.locationId, data.locationId),
+            eq(daycareSessions.studentId, r.studentId),
+            eq(daycareSessions.sessionDate, dateObj),
+          )
+        );
+        // Only create a session if present and at least one time is provided
+        if (isPresent && (r.inTime || r.outTime)) {
+          await db.insert(daycareSessions).values({
+            schoolId:    data.schoolId,
+            locationId:  data.locationId,
+            studentId:   r.studentId,
+            sessionDate: dateObj,
+            inTime:      r.inTime ?? null,
+            outTime:     r.outTime ?? null,
+            recordedBy:  data.markedBy ?? null,
+          });
+        }
+      }
+    }
+
     return { ok: true, saved: data.records.length };
   });
 
@@ -4809,7 +4841,7 @@ export const getStudentAttendanceForDate = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     await requireAuth(data.schoolId, data.locationId);
     const { db } = await import("@/lib/db");
-    const { studentAttendance, attendanceSessions, students } = await import("@/lib/db/schema");
+    const { studentAttendance, attendanceSessions, students, daycareSessions, locations } = await import("@/lib/db/schema");
 
     const dateObj = new Date(data.date);
 
@@ -4843,8 +4875,29 @@ export const getStudentAttendanceForDate = createServerFn({ method: "GET" })
         )
       );
 
+    // Fetch existing daycare sessions for this location+date so in/out times repopulate
+    const daycareRows = await db
+      .select({ studentId: daycareSessions.studentId, inTime: daycareSessions.inTime, outTime: daycareSessions.outTime })
+      .from(daycareSessions)
+      .where(
+        and(
+          eq(daycareSessions.schoolId, data.schoolId),
+          eq(daycareSessions.locationId, data.locationId),
+          eq(daycareSessions.sessionDate, dateObj),
+        )
+      );
+    const daycareMap = new Map(daycareRows.map((r) => [r.studentId, { inTime: r.inTime, outTime: r.outTime }]));
+
+    // Fetch facility type for this location
+    const [loc] = await db.select({ facilityType: locations.facilityType }).from(locations).where(eq(locations.id, data.locationId)).limit(1);
+    const facilityType = loc?.facilityType ?? "school";
+
     // sessionTaken = true means attendance was marked for this class+date
-    return { sessionTaken: !!session || rows.length > 0, records: rows };
+    return {
+      sessionTaken: !!session || rows.length > 0,
+      records: rows.map((r) => ({ ...r, ...daycareMap.get(r.studentId) })),
+      facilityType,
+    };
   });
 
 // ── Get attendance history (filterable by class, student, date range) ─────────
