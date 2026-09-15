@@ -49,6 +49,7 @@ export const locations = mysqlTable("locations", {
   pincode: varchar("pincode", { length: 20 }),
   phone: varchar("phone", { length: 50 }),
   capacity: int("capacity"),
+  facilityType: mysqlEnum("facility_type", ["school", "daycare", "both"]).default("school"),
   status: mysqlEnum("status", ["active", "inactive"]).default("active"),
   createdAt: timestamp("created_at").defaultNow(),
 }, (t) => ({
@@ -208,9 +209,10 @@ export const feeStructures = mysqlTable("fee_structures", {
   schoolId: int("school_id").notNull().references(() => schools.id),
   locationId: int("location_id").notNull().references(() => locations.id),
   classId: int("class_id").references(() => classes.id),
+  feeType: mysqlEnum("fee_type", ["school", "daycare_hourly", "daycare_monthly"]).default("school"),
   name: varchar("name", { length: 255 }).notNull(),
   amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
-  frequency: mysqlEnum("frequency", ["monthly", "quarterly", "annually", "one_time"]).default("monthly"),
+  frequency: mysqlEnum("frequency", ["monthly", "quarterly", "annually", "one_time", "hourly"]).default("monthly"),
   dueDay: int("due_day").default(1),
   description: text("description"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -249,6 +251,23 @@ export const payments = mysqlTable("payments", {
   paidAt: timestamp("paid_at").defaultNow(),
 }, (t) => ({
   uniqueRazorpayPayment: uniqueIndex("payments_razorpay_id").on(t.razorpayPaymentId),
+}));
+
+// ── Daycare Sessions ──────────────────────────────────────────────────────────
+export const daycareSessions = mysqlTable("daycare_sessions", {
+  id: int("id").primaryKey().autoincrement(),
+  schoolId: int("school_id").notNull().references(() => schools.id),
+  locationId: int("location_id").notNull().references(() => locations.id),
+  studentId: int("student_id").notNull().references(() => students.id),
+  sessionDate: date("session_date").notNull(),
+  inTime: varchar("in_time", { length: 10 }),
+  outTime: varchar("out_time", { length: 10 }),
+  recordedBy: int("recorded_by").references(() => users.id),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
+}, (t) => ({
+  uniqueDaycareSession: uniqueIndex("daycare_sessions_school_location_student_date").on(t.schoolId, t.locationId, t.studentId, t.sessionDate),
 }));
 
 // ── Staff / Teachers ────────────────────────────────────────────────────────
