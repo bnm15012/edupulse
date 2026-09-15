@@ -232,77 +232,165 @@ function InvoiceViewModal({ invoiceId, onClose }: { invoiceId: number; onClose: 
       ) : (() => {
         const { invoice, student, parents, school, location } = data;
         const branchAddress = [location?.address, [location?.city, location?.state].filter(Boolean).join(", "), [location?.pincode, location?.phone].filter(Boolean).join(" · ")].filter(Boolean).join(" · ") || school?.address;
+        const statusColor: Record<string, string> = { paid: "bg-emerald-100 text-emerald-700 border-emerald-200", overdue: "bg-rose-100 text-rose-700 border-rose-200", sent: "bg-blue-100 text-blue-700 border-blue-200", draft: "bg-slate-100 text-slate-600 border-slate-200", cancelled: "bg-slate-100 text-slate-500 border-slate-200" };
+        const sc = statusColor[invoice.status] ?? statusColor.draft;
+        const totalDaycareHrs = invoice.details?.daycareSessions?.reduce((s: number, r: any) => s + (Number(r.hours) || 0), 0) ?? 0;
         return (
           <div className="print:py-0 print:px-0">
-            <div ref={cardRef} className="bg-white p-8 shadow rounded-2xl print:shadow-none print:rounded-none print:p-0">
+            <div ref={cardRef} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden print:shadow-none print:rounded-none print:border-0">
 
-              {/* Header */}
-              <div className="flex items-start justify-between border-b-2 border-slate-100 pb-6 mb-6">
-                <div className="flex items-start gap-4">
-                  {school?.logoUrl ? <img src={school.logoUrl} alt="" className="w-16 h-16 object-contain rounded-xl border border-slate-200" /> : <div className="w-16 h-16 bg-slate-100 rounded-xl" />}
+              {/* Colour band + school + invoice meta */}
+              <div className="bg-gradient-to-r from-slate-800 to-slate-700 px-8 py-6 flex items-start justify-between gap-6">
+                <div className="flex items-center gap-4">
+                  {school?.logoUrl
+                    ? <img src={school.logoUrl} alt="" className="w-14 h-14 object-contain rounded-xl bg-white/10 p-1" />
+                    : <div className="w-14 h-14 rounded-xl bg-white/10 flex items-center justify-center text-white/60 text-2xl font-bold">{school?.name?.[0]}</div>}
                   <div>
-                    <h1 className="text-2xl font-bold text-slate-900">{school?.name}</h1>
-                    <p className="text-sm text-slate-500 mt-1">{branchAddress}</p>
-                    {school?.email && <p className="text-xs text-slate-400 mt-0.5">{school.email} · {school?.phone}</p>}
-                    <p className="text-xs text-slate-400 mt-0.5">Branch: {location?.name}</p>
+                    <h1 className="text-xl font-extrabold text-white tracking-tight">{school?.name}</h1>
+                    <p className="text-sm text-slate-300 mt-0.5">{branchAddress}</p>
+                    {school?.email && <p className="text-xs text-slate-400 mt-0.5">{school.email} · {school.phone}</p>}
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm font-bold text-slate-700">Invoice #{invoice.id}</p>
-                  {invoice.details?.isPartialMonth
-                    ? <p className="text-sm text-slate-500">{invoice.details.fromDate} to {invoice.details.toDate} <span className="text-xs text-amber-600 font-semibold">(Partial month)</span></p>
-                    : <p className="text-sm text-slate-500">Month: {invoice.month}</p>}
-                  <p className="text-xs text-slate-400">Generated: {new Date(invoice.createdAt).toLocaleDateString("en-IN")}</p>
-                  <span className={`inline-block mt-2 px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide ${invoice.status === "paid" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{invoice.status}</span>
+                <div className="text-right shrink-0">
+                  <p className="text-2xl font-extrabold text-white">INVOICE</p>
+                  <p className="text-slate-300 text-sm mt-0.5">#{invoice.id}</p>
+                  <span className={`inline-block mt-2 px-3 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider border ${sc}`}>{invoice.status}</span>
                 </div>
               </div>
 
-              {/* Billed to */}
-              <div className="mb-8">
-                <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Billed to</h2>
-                <p className="text-lg font-bold text-slate-900">{student?.firstName} {student?.lastName}</p>
-                {student?.className && <p className="text-sm text-slate-600">Class: {student.className}</p>}
-                {parents?.length > 0 && <div className="mt-2 text-sm text-slate-500 space-y-0.5">{parents.map((p: any, i: number) => <p key={i}>{p.name}{p.phone ? ` · ${p.phone}` : ""}</p>)}</div>}
-              </div>
+              <div className="px-8 py-6">
 
-              {/* Line items */}
-              <table className="w-full text-sm border border-slate-200 mb-6">
-                <thead className="bg-slate-50"><tr><th className="text-left px-4 py-2 font-semibold text-slate-700">Description</th><th className="text-right px-4 py-2 font-semibold text-slate-700">Amount</th></tr></thead>
-                <tbody>
-                  {invoice.details?.items?.length ? invoice.details.items.map((item: any, i: number) => (
-                    <tr key={i}>
-                      <td className="px-4 py-3 text-slate-700">{item.name}{item.feeType === "daycare_hourly" && item.hours != null && <span className="block text-xs text-slate-500">{item.hours} hrs × {money(item.rate)}/hr</span>}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-slate-900">{money(item.amount)}</td>
-                    </tr>
-                  )) : (
-                    <tr><td className="px-4 py-3 text-slate-700">Monthly fee — {invoice.month}</td><td className="px-4 py-3 text-right font-semibold text-slate-900">{money(invoice.amount)}</td></tr>
-                  )}
-                </tbody>
-                <tfoot className="bg-slate-50"><tr><td className="px-4 py-2 text-right font-semibold text-slate-700">Total</td><td className="px-4 py-2 text-right font-bold text-slate-900">{money(invoice.amount)}</td></tr></tfoot>
-              </table>
+                {/* Billed to + invoice meta two-column */}
+                <div className="grid grid-cols-2 gap-6 mb-8 pb-6 border-b border-slate-100">
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Billed To</p>
+                    <p className="text-lg font-bold text-slate-900">{student?.firstName} {student?.lastName}</p>
+                    {student?.className && <p className="text-sm text-slate-500 mt-0.5">Class: <span className="font-medium text-slate-700">{student.className}</span></p>}
+                    {parents?.length > 0 && (
+                      <div className="mt-2 space-y-0.5">
+                        {parents.map((p: any, i: number) => (
+                          <p key={i} className="text-sm text-slate-500">{p.name}{p.phone ? <span className="text-slate-400"> · {p.phone}</span> : null}</p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Invoice Details</p>
+                    <div className="space-y-1 text-sm">
+                      {invoice.details?.isPartialMonth ? (
+                        <>
+                          <div className="flex justify-end gap-2"><span className="text-slate-400">Period</span><span className="font-semibold text-slate-700">{invoice.details.fromDate} → {invoice.details.toDate}</span></div>
+                          <div className="flex justify-end gap-2"><span className="text-amber-500 text-xs font-semibold">Partial month</span></div>
+                        </>
+                      ) : (
+                        <div className="flex justify-end gap-2"><span className="text-slate-400">Month</span><span className="font-semibold text-slate-700">{invoice.month}</span></div>
+                      )}
+                      <div className="flex justify-end gap-2"><span className="text-slate-400">Generated</span><span className="font-semibold text-slate-700">{new Date(invoice.createdAt).toLocaleDateString("en-IN")}</span></div>
+                      {invoice.dueDate && <div className="flex justify-end gap-2"><span className="text-slate-400">Due date</span><span className="font-semibold text-rose-600">{invoice.dueDate}</span></div>}
+                    </div>
+                  </div>
+                </div>
 
-              {/* Daycare sessions */}
-              {invoice.details?.daycareSessions?.length > 0 && (
+                {/* Line items */}
                 <div className="mb-6">
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Daycare details</h3>
-                  <table className="w-full text-sm border border-slate-200">
-                    <thead className="bg-slate-50"><tr><th className="text-left px-4 py-2 font-semibold text-slate-700">Date</th><th className="text-left px-4 py-2 font-semibold text-slate-700">In</th><th className="text-left px-4 py-2 font-semibold text-slate-700">Out</th><th className="text-right px-4 py-2 font-semibold text-slate-700">Daycare hrs</th></tr></thead>
-                    <tbody>{invoice.details.daycareSessions.map((s: any, i: number) => (<tr key={i}><td className="px-4 py-2 text-slate-700">{s.date}</td><td className="px-4 py-2 text-slate-600">{s.inTime ?? "—"}</td><td className="px-4 py-2 text-slate-600">{s.outTime ?? "—"}</td><td className="px-4 py-2 text-right font-semibold text-slate-900">{s.hours ?? 0}</td></tr>))}</tbody>
-                  </table>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Fee Breakdown</p>
+                  <div className="rounded-xl border border-slate-200 overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200">
+                          <th className="text-left px-5 py-3 font-semibold text-slate-600">Description</th>
+                          <th className="text-right px-5 py-3 font-semibold text-slate-600">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {invoice.details?.items?.length ? invoice.details.items.map((item: any, i: number) => (
+                          <tr key={i} className={item.feeType === "daycare_hourly" ? "bg-violet-50/40" : ""}>
+                            <td className="px-5 py-3.5">
+                              <p className="font-medium text-slate-800">{item.name}</p>
+                              {item.feeType === "daycare_hourly" && item.hours != null && (
+                                <p className="text-xs text-violet-500 mt-0.5">{item.hours} hrs × {money(item.rate)}/hr</p>
+                              )}
+                              {item.description && <p className="text-xs text-slate-400 mt-0.5">{item.description}</p>}
+                            </td>
+                            <td className="px-5 py-3.5 text-right font-semibold text-slate-900">{money(item.amount)}</td>
+                          </tr>
+                        )) : (
+                          <tr><td className="px-5 py-3.5 text-slate-700">Monthly fee — {invoice.month}</td><td className="px-5 py-3.5 text-right font-semibold text-slate-900">{money(invoice.amount)}</td></tr>
+                        )}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-slate-800 text-white">
+                          <td className="px-5 py-3 font-bold text-right">Total</td>
+                          <td className="px-5 py-3 text-right font-extrabold text-lg">{money(invoice.amount)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
                 </div>
-              )}
 
-              {/* Due summary */}
-              <div className="bg-slate-50 rounded-xl p-5 mb-8">
-                <div className="flex justify-between py-1.5"><span className="text-slate-600">Total Amount</span><span className="font-semibold text-slate-900">{money(invoice.amount)}</span></div>
-                <div className="flex justify-between py-1.5"><span className="text-slate-600">Paid</span><span className="font-semibold text-emerald-700">{money(invoice.paid)}</span></div>
-                <div className="flex justify-between py-1.5 border-t border-slate-200 mt-2 pt-2"><span className="font-bold text-slate-900">Due</span><span className="font-bold text-rose-700">{money(invoice.due)}</span></div>
-                {invoice.dueDate && <p className="text-xs text-slate-500 mt-3">Due date: {invoice.dueDate}</p>}
-              </div>
+                {/* Payment summary */}
+                <div className="grid grid-cols-3 gap-4 mb-8">
+                  <div className="rounded-xl border border-slate-200 p-4 text-center">
+                    <p className="text-xs text-slate-400 mb-1">Total Amount</p>
+                    <p className="text-lg font-bold text-slate-900">{money(invoice.amount)}</p>
+                  </div>
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center">
+                    <p className="text-xs text-emerald-500 mb-1">Paid</p>
+                    <p className="text-lg font-bold text-emerald-700">{money(invoice.paid)}</p>
+                  </div>
+                  <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-center">
+                    <p className="text-xs text-rose-500 mb-1">Balance Due</p>
+                    <p className="text-lg font-bold text-rose-700">{money(invoice.due)}</p>
+                  </div>
+                </div>
 
-              {/* Footer */}
-              <div className="text-center text-xs text-slate-400 border-t border-slate-100 pt-6">
-                <p>This is a computer generated invoice. For queries, contact {school?.phone || school?.email}.</p>
+                {/* Daycare sessions */}
+                {invoice.details?.daycareSessions?.length > 0 && (
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Daycare Attendance Log</p>
+                      <span className="text-xs font-semibold text-violet-600 bg-violet-50 px-3 py-1 rounded-full border border-violet-200">
+                        {totalDaycareHrs.toFixed(1)} total hrs
+                      </span>
+                    </div>
+                    <div className="rounded-xl border border-violet-200 overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-violet-50 border-b border-violet-200">
+                            <th className="text-left px-5 py-2.5 font-semibold text-violet-700">Date</th>
+                            <th className="text-left px-5 py-2.5 font-semibold text-violet-700">School ends</th>
+                            <th className="text-left px-5 py-2.5 font-semibold text-violet-700">In</th>
+                            <th className="text-left px-5 py-2.5 font-semibold text-violet-700">Out</th>
+                            <th className="text-right px-5 py-2.5 font-semibold text-violet-700">Daycare hrs</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-violet-50">
+                          {invoice.details.daycareSessions.map((s: any, i: number) => (
+                            <tr key={i} className="hover:bg-violet-50/50 transition-colors">
+                              <td className="px-5 py-2.5 font-medium text-slate-700">{s.date}</td>
+                              <td className="px-5 py-2.5 text-slate-400">{s.classEndTime ?? "—"}</td>
+                              <td className="px-5 py-2.5 text-slate-600">{s.inTime ?? "—"}</td>
+                              <td className="px-5 py-2.5 text-slate-600">{s.outTime ?? "—"}</td>
+                              <td className="px-5 py-2.5 text-right font-bold text-violet-700">{s.hours ?? 0}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-violet-100 border-t border-violet-200">
+                            <td colSpan={4} className="px-5 py-2.5 font-semibold text-violet-700 text-right">Total daycare hours</td>
+                            <td className="px-5 py-2.5 text-right font-extrabold text-violet-800">{totalDaycareHrs.toFixed(1)}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Footer */}
+                <div className="text-center text-xs text-slate-400 border-t border-slate-100 pt-5 mt-4">
+                  <p>This is a computer-generated invoice. For queries contact <span className="font-medium">{school?.phone || school?.email}</span>.</p>
+                </div>
+
               </div>
             </div>
           </div>
