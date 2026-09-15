@@ -22,6 +22,24 @@ const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET ?? "dev-secre
 // Roles that can access any location within their school
 const SCHOOL_WIDE_ROLES = new Set(["super_admin", "school_admin", "accountant"]);
 
+// ── Uniform admission number: SCHOOL_CODE/YY/NNN ───────────────────────────────
+// Derives a 2-3 letter school code from the school name and appends the
+// last two digits of the current year plus the auto-incremented student id.
+function schoolCodeFromName(name: string): string {
+  const cleaned = name.replace(/[^a-zA-Z\s]/g, "");
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "SCH";
+  if (words.length === 1) return words[0].slice(0, 3).toUpperCase();
+  return words.slice(0, 3).map((w) => w[0].toUpperCase()).join("");
+}
+
+function generateAdmissionNumber(schoolName: string, studentId: number): string {
+  const code = schoolCodeFromName(schoolName);
+  const year = new Date().getFullYear() % 100;
+  const seq = String(studentId).padStart(3, "0");
+  return `${code}/${year}/${seq}`;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PLAN LIMITS — single source of truth
 // These are defaults; per-school overrides live in schools.max_students etc.
@@ -2228,7 +2246,9 @@ export const addStudent = createServerFn({ method: "POST" })
     const studentId = Number((studentRes as any).insertId);
 
     // Generate and save the unique admission number
-    await db.update(students).set({ admissionNumber: `KDS-${studentId}` }).where(eq(students.id, studentId));
+    const [schoolRow] = await db.select({ name: schools.name }).from(schools).where(eq(schools.id, data.schoolId)).limit(1);
+    const admissionNumber = generateAdmissionNumber(schoolRow?.name ?? "School", studentId);
+    await db.update(students).set({ admissionNumber }).where(eq(students.id, studentId));
 
     await db.insert(parents).values({
       schoolId: data.schoolId,
@@ -2379,13 +2399,16 @@ export const importStudentsFromCSV = createServerFn({ method: "POST" })
     await assertCanOperateForUser();
 
     const { db } = await import("@/lib/db");
-    const { students, parents, emergencyContacts, medicalNotes, classes, classEnrollments } = await import("@/lib/db/schema");
+    const { students, parents, emergencyContacts, medicalNotes, classes, classEnrollments, schools } = await import("@/lib/db/schema");
 
     // Fetch all active classes for this school+location to resolve class names
     const classRows = await db.select({ id: classes.id, name: classes.name })
       .from(classes)
       .where(and(eq(classes.schoolId, data.schoolId), eq(classes.locationId, data.locationId), eq(classes.status, "active")));
     const classMap = new Map(classRows.map((c) => [c.name.trim().toLowerCase(), c.id]));
+
+    // Fetch school name once for uniform admission numbers
+    const [schoolRow] = await db.select({ name: schools.name }).from(schools).where(eq(schools.id, data.schoolId)).limit(1);
 
     const imported: number[] = [];
     const skipped: { row: number; name: string; reason: string }[] = [];
@@ -2431,7 +2454,8 @@ export const importStudentsFromCSV = createServerFn({ method: "POST" })
           status: "enrolled",
         });
         const studentId = Number((res as any).insertId);
-        await db.update(students).set({ admissionNumber: `EDP-${studentId}` }).where(eq(students.id, studentId));
+        const admissionNumber = generateAdmissionNumber(schoolRow?.name ?? "School", studentId);
+        await db.update(students).set({ admissionNumber }).where(eq(students.id, studentId));
 
         // Parent
         await db.insert(parents).values({
@@ -3035,7 +3059,7 @@ export const enrollFromAdmission = createServerFn({ method: "POST" })
     await requireAuth(data.schoolId, data.locationId);
     await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
-    const { inquiries, students, parents, classEnrollments, users } = await import("@/lib/db/schema");
+    const { inquiries, students, parents, classEnrollments, users, schools } = await import("@/lib/db/schema");
 
     await checkPlanLimit(data.schoolId, "students");
 
@@ -3142,7 +3166,9 @@ export const enrollFromAdmission = createServerFn({ method: "POST" })
 
     // Ensure admission number is generated (for new or pre-existing students without one)
     if (!existingStudent?.admissionNumber) {
-      await db.update(students).set({ admissionNumber: `KDS-${studentId}` }).where(eq(students.id, studentId));
+      const [schoolRow] = await db.select({ name: schools.name }).from(schools).where(eq(schools.id, data.schoolId)).limit(1);
+      const admissionNumber = generateAdmissionNumber(schoolRow?.name ?? "School", studentId);
+      await db.update(students).set({ admissionNumber }).where(eq(students.id, studentId));
     }
 
     // Upsert class enrollment to avoid duplicates
