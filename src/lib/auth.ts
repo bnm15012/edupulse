@@ -2056,9 +2056,14 @@ async function assertCanOperate(schoolId: number) {
   const isFreePlan = !sub || Number(sub.amount ?? 0) <= 0;
   if (isFreePlan) return; // free schools can always operate
 
+  // Trialing and active subscriptions with no period end set are never blocked
+  if (sub.status === "trialing" || sub.status === "active") {
+    if (!sub.currentPeriodEnd) return; // no end date set — treat as open-ended
+  }
+
   const now = new Date();
   const periodEnd = sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd) : null;
-  const isExpired = !periodEnd || periodEnd < now;
+  const isExpired = periodEnd !== null && periodEnd < now;
   if (isExpired) {
     throw new Error("Subscription expired. Please renew your plan to continue.");
   }
