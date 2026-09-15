@@ -404,7 +404,7 @@ function FeeStructuresTab({ schoolId, locationId, classes, isAdmin = true }: { s
         <p className="text-sm text-slate-500">{loading ? "Loading…" : `${structures.length} fee structure${structures.length !== 1 ? "s" : ""}`}</p>
         {isAdmin && (
           <button onClick={() => { setEditing(null); setModalOpen(true); }}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold rounded-xl transition shadow-sm">
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition shadow-sm">
             <Plus className="w-4 h-4" /> Add Structure
           </button>
         )}
