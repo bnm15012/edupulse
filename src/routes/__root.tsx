@@ -31,6 +31,7 @@ import {
   MoreHorizontal,
   X,
   Calendar,
+  Clock,
 } from "lucide-react";
 import appCss from "../styles.css?url";
 import { TenantProvider, useTenant } from "@/lib/tenant";
@@ -65,6 +66,7 @@ const ADMIN_NAV = [
   { to: "/admissions",      label: "Admissions",     icon: UserPlus },
   { to: "/students",        label: "Students",       icon: Users },
   { to: "/attendance",      label: "Attendance",     icon: CalendarCheck },
+  { to: "/daycare",         label: "Daycare",        icon: Clock },
   { to: "/fees",            label: "Fees",           icon: DollarSign },
   { to: "/academics",       label: "Academics",      icon: GraduationCap },
   { to: "/exams",           label: "Exams",          icon: ClipboardList },
@@ -86,6 +88,7 @@ const TEACHER_NAV = [
   { to: "/teacher",             label: "My Dashboard",  icon: LayoutDashboard },
   { to: "/attendance",          label: "Attendance",    icon: CalendarCheck   },
   { to: "/students",            label: "Students",      icon: Users           },
+  { to: "/daycare",             label: "Daycare",       icon: Clock            },
   { to: "/academics",           label: "Academics",     icon: GraduationCap   },
   { to: "/exams",               label: "Exams",         icon: ClipboardList   },
   { to: "/classes",             label: "Classes",       icon: DoorOpen        },
@@ -120,6 +123,7 @@ const ACCOUNTANT_NAV = [
 
 const RECEPTIONIST_NAV = [
   { to: "/admissions", label: "Admissions", icon: UserPlus },
+  { to: "/daycare",    label: "Daycare",    icon: Clock },
   { to: "/fees",       label: "Fees",       icon: DollarSign },
   { to: "/exams",      label: "Exams",      icon: ClipboardList },
 ];

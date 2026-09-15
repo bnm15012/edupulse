@@ -235,6 +235,7 @@ export const invoices = mysqlTable("invoices", {
   razorpayOrderId: varchar("razorpay_order_id", { length: 255 }),
   razorpayPaymentId: varchar("razorpay_payment_id", { length: 255 }),
   generatedMonth: varchar("generated_month", { length: 7 }), // "YYYY-MM" for dedup of auto-generated invoices
+  details: text("details"),
   createdAt: timestamp("created_at").defaultNow(),
 }, (t) => ({
   uniqueAutoInvoice: uniqueIndex("invoices_school_student_fee_month").on(t.schoolId, t.studentId, t.feeStructureId, t.generatedMonth),

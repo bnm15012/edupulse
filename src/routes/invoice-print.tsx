@@ -76,15 +76,55 @@ function InvoicePrint() {
         <table className="w-full text-sm border border-slate-200 mb-6">
           <thead className="bg-slate-50"><tr><th className="text-left px-4 py-2 font-semibold text-slate-700">Description</th><th className="text-right px-4 py-2 font-semibold text-slate-700">Amount</th></tr></thead>
           <tbody>
-            <tr>
-              <td className="px-4 py-3 text-slate-700">Monthly fee — {invoice.month}</td>
-              <td className="px-4 py-3 text-right font-semibold text-slate-900">{money(invoice.amount)}</td>
-            </tr>
+            {invoice.details?.items?.length ? (
+              invoice.details.items.map((item: any, i: number) => (
+                <tr key={i}>
+                  <td className="px-4 py-3 text-slate-700">
+                    {item.name}
+                    {item.feeType === "daycare_hourly" && item.hours != null && (
+                      <span className="block text-xs text-slate-500">{item.hours} hrs × {money(item.rate)}/hr</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold text-slate-900">{money(item.amount)}</td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td className="px-4 py-3 text-slate-700">Monthly fee — {invoice.month}</td>
+                <td className="px-4 py-3 text-right font-semibold text-slate-900">{money(invoice.amount)}</td>
+              </tr>
+            )}
           </tbody>
           <tfoot className="bg-slate-50">
             <tr><td className="px-4 py-2 text-right font-semibold text-slate-700">Total</td><td className="px-4 py-2 text-right font-bold text-slate-900">{money(invoice.amount)}</td></tr>
           </tfoot>
         </table>
+
+        {invoice.details?.daycareSessions?.length > 0 && (
+          <div className="mb-6">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Daycare details</h3>
+            <table className="w-full text-sm border border-slate-200">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="text-left px-4 py-2 font-semibold text-slate-700">Date</th>
+                  <th className="text-left px-4 py-2 font-semibold text-slate-700">In</th>
+                  <th className="text-left px-4 py-2 font-semibold text-slate-700">Out</th>
+                  <th className="text-right px-4 py-2 font-semibold text-slate-700">Daycare hrs</th>
+                </tr>
+              </thead>
+              <tbody>
+                {invoice.details.daycareSessions.map((s: any, i: number) => (
+                  <tr key={i}>
+                    <td className="px-4 py-2 text-slate-700">{s.date}</td>
+                    <td className="px-4 py-2 text-slate-600">{s.inTime ?? "—"}</td>
+                    <td className="px-4 py-2 text-slate-600">{s.outTime ?? "—"}</td>
+                    <td className="px-4 py-2 text-right font-semibold text-slate-900">{s.hours ?? 0}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {/* Due summary */}
         <div className="bg-slate-50 rounded-xl p-5 mb-8">

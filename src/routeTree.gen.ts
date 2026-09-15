@@ -20,6 +20,7 @@ import { Route as ConfirmRouteImport } from './routes/confirm'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as CurriculumRouteImport } from './routes/curriculum'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as DaycareRouteImport } from './routes/daycare'
 import { Route as ExamsRouteImport } from './routes/exams'
 import { Route as ExpensesRouteImport } from './routes/expenses'
 import { Route as FeesRouteImport } from './routes/fees'
@@ -111,6 +112,11 @@ const CurriculumRoute = CurriculumRouteImport.update({
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DaycareRoute = DaycareRouteImport.update({
+  id: '/daycare',
+  path: '/daycare',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ExamsRoute = ExamsRouteImport.update({
@@ -312,6 +318,7 @@ export interface FileRoutesByFullPath {
   '/contact': typeof ContactRoute
   '/curriculum': typeof CurriculumRoute
   '/dashboard': typeof DashboardRoute
+  '/daycare': typeof DaycareRoute
   '/exams': typeof ExamsRoute
   '/expenses': typeof ExpensesRoute
   '/fees': typeof FeesRoute
@@ -362,6 +369,7 @@ export interface FileRoutesByTo {
   '/contact': typeof ContactRoute
   '/curriculum': typeof CurriculumRoute
   '/dashboard': typeof DashboardRoute
+  '/daycare': typeof DaycareRoute
   '/exams': typeof ExamsRoute
   '/expenses': typeof ExpensesRoute
   '/fees': typeof FeesRoute
@@ -410,6 +418,7 @@ export interface FileRoutesById {
   '/contact': typeof ContactRoute
   '/curriculum': typeof CurriculumRoute
   '/dashboard': typeof DashboardRoute
+  '/daycare': typeof DaycareRoute
   '/exams': typeof ExamsRoute
   '/expenses': typeof ExpensesRoute
   '/fees': typeof FeesRoute
@@ -462,6 +471,7 @@ export interface FileRouteTypes {
     | '/contact'
     | '/curriculum'
     | '/dashboard'
+    | '/daycare'
     | '/exams'
     | '/expenses'
     | '/fees'
@@ -512,6 +522,7 @@ export interface FileRouteTypes {
     | '/contact'
     | '/curriculum'
     | '/dashboard'
+    | '/daycare'
     | '/exams'
     | '/expenses'
     | '/fees'
@@ -559,6 +570,7 @@ export interface FileRouteTypes {
     | '/contact'
     | '/curriculum'
     | '/dashboard'
+    | '/daycare'
     | '/exams'
     | '/expenses'
     | '/fees'
@@ -610,6 +622,7 @@ export interface RootRouteChildren {
   ContactRoute: typeof ContactRoute
   CurriculumRoute: typeof CurriculumRoute
   DashboardRoute: typeof DashboardRoute
+  DaycareRoute: typeof DaycareRoute
   ExamsRoute: typeof ExamsRoute
   ExpensesRoute: typeof ExpensesRoute
   FeesRoute: typeof FeesRoute
@@ -713,6 +726,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/daycare': {
+      id: '/daycare'
+      path: '/daycare'
+      fullPath: '/daycare'
+      preLoaderRoute: typeof DaycareRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/exams': {
@@ -1061,6 +1081,7 @@ const rootRouteChildren: RootRouteChildren = {
   ContactRoute: ContactRoute,
   CurriculumRoute: CurriculumRoute,
   DashboardRoute: DashboardRoute,
+  DaycareRoute: DaycareRoute,
   ExamsRoute: ExamsRoute,
   ExpensesRoute: ExpensesRoute,
   FeesRoute: FeesRoute,

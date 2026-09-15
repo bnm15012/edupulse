@@ -3972,7 +3972,7 @@ export const generateStudentInvoice = createServerFn({ method: "POST" })
     await requireAuth(data.schoolId, data.locationId);
     await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
-    const { invoices, feeStructures, students } = await import("@/lib/db/schema");
+    const { invoices, feeStructures, students, daycareSessions, classes, locations } = await import("@/lib/db/schema");
 
     // Idempotency: if an invoice already exists for this student+month, return it unchanged.
     const [existing] = await db.select({ id: invoices.id })
@@ -3985,13 +3985,20 @@ export const generateStudentInvoice = createServerFn({ method: "POST" })
       .limit(1);
     if (existing) return { invoiceId: existing.id, isExisting: true };
 
-    // Fetch student and applicable fee structures
-    const [student] = await db.select({ currentClassId: students.currentClassId })
+    const [student] = await db
+      .select({ currentClassId: students.currentClassId })
       .from(students)
       .where(eq(students.id, data.studentId))
       .limit(1);
 
-    const fees = await db.select({ id: feeStructures.id, amount: feeStructures.amount, dueDay: feeStructures.dueDay, name: feeStructures.name })
+    const fees = await db
+      .select({
+        id: feeStructures.id,
+        amount: feeStructures.amount,
+        dueDay: feeStructures.dueDay,
+        name: feeStructures.name,
+        feeType: feeStructures.feeType,
+      })
       .from(feeStructures)
       .where(and(
         eq(feeStructures.schoolId, data.schoolId),
@@ -4002,7 +4009,87 @@ export const generateStudentInvoice = createServerFn({ method: "POST" })
         ),
       ));
 
-    const total = fees.reduce((sum, f) => sum + parseFloat(f.amount as any), 0);
+    const [location] = await db
+      .select({ facilityType: locations.facilityType })
+      .from(locations)
+      .where(eq(locations.id, data.locationId))
+      .limit(1);
+    const facilityType = location?.facilityType ?? "school";
+
+    const [classRow] = await db
+      .select({ endTime: classes.endTime })
+      .from(students)
+      .leftJoin(classes, eq(students.currentClassId, classes.id))
+      .where(eq(students.id, data.studentId))
+      .limit(1);
+    const classEndTime = classRow?.endTime ?? null;
+
+    const [y, m] = data.month.split("-").map(Number);
+    const lastDay = new Date(y, m, 0).getDate();
+    const startDate = `${data.month}-01`;
+    const endDate = `${data.month}-${String(lastDay).padStart(2, "0")}`;
+
+    const sessions = await db
+      .select({
+        sessionDate: daycareSessions.sessionDate,
+        inTime: daycareSessions.inTime,
+        outTime: daycareSessions.outTime,
+        notes: daycareSessions.notes,
+      })
+      .from(daycareSessions)
+      .where(and(
+        eq(daycareSessions.schoolId, data.schoolId),
+        eq(daycareSessions.locationId, data.locationId),
+        eq(daycareSessions.studentId, data.studentId),
+        gte(daycareSessions.sessionDate, new Date(startDate)),
+        lte(daycareSessions.sessionDate, new Date(endDate)),
+      ))
+      .orderBy(daycareSessions.sessionDate);
+
+    function timeToMin(t: string | null) {
+      if (!t || !t.includes(":")) return null;
+      const [h, mn] = t.split(":").map(Number);
+      return h * 60 + mn;
+    }
+
+    function daycareHoursFor(inT: string | null, outT: string | null) {
+      const inM = timeToMin(inT);
+      const outM = timeToMin(outT);
+      if (inM == null || outM == null || outM <= inM) return 0;
+      if (facilityType === "daycare") return (outM - inM) / 60;
+      const endM = timeToMin(classEndTime);
+      if (endM == null) return 0;
+      const startM = Math.max(inM, endM);
+      if (outM <= startM) return 0;
+      return (outM - startM) / 60;
+    }
+
+    const sessionDetails = sessions.map((s) => {
+      const hrs = daycareHoursFor(s.inTime, s.outTime);
+      return {
+        date: s.sessionDate ? s.sessionDate.toISOString().slice(0, 10) : null,
+        inTime: s.inTime,
+        outTime: s.outTime,
+        hours: +hrs.toFixed(2),
+        notes: s.notes,
+      };
+    });
+    const totalHours = sessionDetails.reduce((sum, s) => sum + s.hours, 0);
+
+    const items: any[] = [];
+    let total = 0;
+    for (const f of fees) {
+      const rate = parseFloat(f.amount as any);
+      if (f.feeType === "daycare_hourly") {
+        const amount = +(totalHours * rate).toFixed(2);
+        items.push({ name: f.name, feeType: f.feeType, hours: +totalHours.toFixed(2), rate, amount });
+        total += amount;
+      } else {
+        items.push({ name: f.name, feeType: f.feeType, amount: rate });
+        total += rate;
+      }
+    }
+
     const dueDay = fees[0]?.dueDay ?? 1;
     const dueDate = `${data.month}-${String(dueDay).padStart(2, "0")}`;
 
@@ -4010,10 +4097,11 @@ export const generateStudentInvoice = createServerFn({ method: "POST" })
       schoolId: data.schoolId,
       locationId: data.locationId,
       studentId: data.studentId,
-      amount: String(total),
+      amount: String(total.toFixed(2)),
       dueDate: new Date(dueDate) as any,
       status: "draft",
       generatedMonth: data.month,
+      details: JSON.stringify({ items, daycareSessions: sessionDetails }),
     });
     return { invoiceId: Number((res as any).insertId), isExisting: false };
   });
@@ -4079,6 +4167,13 @@ export const getInvoicePrintData = createServerFn({ method: "GET" })
     const paid = parseFloat((paidRow.total as any) ?? "0");
     const due = parseFloat(inv.amount as any) - paid;
 
+    let details = { items: [] as any[], daycareSessions: [] as any[] };
+    try {
+      if (inv.details) details = JSON.parse(inv.details as any);
+    } catch {
+      // ignore
+    }
+
     return {
       invoice: {
         id: inv.id,
@@ -4089,6 +4184,7 @@ export const getInvoicePrintData = createServerFn({ method: "GET" })
         paid,
         due,
         createdAt: inv.createdAt ? inv.createdAt.toISOString() : null,
+        details,
       },
       student,
       parents: parentRows,
@@ -4188,6 +4284,7 @@ export const listFeeStructures = createServerFn({ method: "GET" })
       .select({
         id: feeStructures.id, name: feeStructures.name,
         amount: feeStructures.amount, frequency: feeStructures.frequency,
+        feeType: feeStructures.feeType,
         dueDay: feeStructures.dueDay, description: feeStructures.description,
         classId: feeStructures.classId, className: classes.name,
         createdAt: feeStructures.createdAt,
@@ -4202,7 +4299,8 @@ const addFeeStructureSchema = z.object({
   schoolId: z.number(), locationId: z.number(),
   name: z.string().trim().min(1).max(255),
   amount: z.string().regex(/^\d+(\.\d{1,2})?$/),
-  frequency: z.enum(["monthly", "quarterly", "annually", "one_time"]),
+  frequency: z.enum(["monthly", "quarterly", "annually", "one_time", "hourly"]),
+  feeType: z.enum(["school", "daycare_hourly", "daycare_monthly"]).default("school"),
   dueDay: z.number().int().min(1).max(31).optional(),
   classId: z.number().optional(),
   description: z.string().max(1000).optional(),
@@ -4230,6 +4328,7 @@ export const addFeeStructure = createServerFn({ method: "POST" })
     const [r] = await db.insert(feeStructures).values({
       schoolId: data.schoolId, locationId: data.locationId,
       name: data.name, amount: data.amount, frequency: data.frequency,
+      feeType: data.feeType,
       dueDay: data.dueDay ?? 1, classId: data.classId ?? null,
       description: data.description || null,
     });
@@ -4240,7 +4339,8 @@ const updateFeeStructureSchema = z.object({
   feeStructureId: z.number(),
   name: z.string().trim().min(1).max(255),
   amount: z.string().regex(/^\d+(\.\d{1,2})?$/),
-  frequency: z.enum(["monthly", "quarterly", "annually", "one_time"]),
+  frequency: z.enum(["monthly", "quarterly", "annually", "one_time", "hourly"]),
+  feeType: z.enum(["school", "daycare_hourly", "daycare_monthly"]).optional(),
   dueDay: z.number().int().min(1).max(31).optional(),
   classId: z.number().optional(),
   description: z.string().max(1000).optional(),
@@ -4271,6 +4371,7 @@ export const updateFeeStructure = createServerFn({ method: "POST" })
 
     await db.update(feeStructures).set({
       name: data.name, amount: data.amount, frequency: data.frequency,
+      feeType: data.feeType ?? undefined,
       dueDay: data.dueDay ?? 1, classId: data.classId ?? null,
       description: data.description || null,
     }).where(eq(feeStructures.id, data.feeStructureId));
@@ -8245,5 +8346,152 @@ export const getUpcomingHolidays = createServerFn({ method: "GET" })
       ...h,
       date: h.date.toISOString().slice(0, 10),
     }));
+  });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DAYCARE SESSIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+const listDaycareSessionsSchema = z.object({
+  schoolId: z.number(),
+  locationId: z.number(),
+  sessionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  classId: z.number().optional(),
+});
+
+export const listDaycareSessions = createServerFn({ method: "GET" })
+  .validator((input: unknown) => listDaycareSessionsSchema.parse(input))
+  .handler(async ({ data }) => {
+    const user = await requireAuth(data.schoolId, data.locationId);
+    const allowed = ["super_admin", "school_admin", "location_admin", "teacher", "staff", "receptionist"];
+    if (!allowed.includes(user.role ?? "")) throw new Error("Not authorized");
+    await assertCanOperateForUser();
+
+    const { db } = await import("@/lib/db");
+    const { students, classes, daycareSessions } = await import("@/lib/db/schema");
+
+    const base = and(
+      eq(students.schoolId, data.schoolId),
+      eq(students.locationId, data.locationId),
+      eq(students.status, "enrolled")
+    );
+
+    const rows = await db
+      .select({
+        studentId: students.id,
+        firstName: students.firstName,
+        lastName: students.lastName,
+        currentClassId: students.currentClassId,
+        className: classes.name,
+        classEndTime: classes.endTime,
+        sessionId: daycareSessions.id,
+        inTime: daycareSessions.inTime,
+        outTime: daycareSessions.outTime,
+        notes: daycareSessions.notes,
+      })
+      .from(students)
+      .leftJoin(classes, eq(students.currentClassId, classes.id))
+      .leftJoin(
+        daycareSessions,
+        and(
+          eq(daycareSessions.studentId, students.id),
+          eq(daycareSessions.sessionDate, new Date(data.sessionDate))
+        )
+      )
+      .where(data.classId ? and(base, eq(students.currentClassId, data.classId)) : base)
+      .orderBy(students.firstName, students.lastName);
+
+    const loc = await db
+      .select({ facilityType: (await import("@/lib/db/schema")).locations.facilityType })
+      .from((await import("@/lib/db/schema")).locations)
+      .where(and(eq((await import("@/lib/db/schema")).locations.schoolId, data.schoolId), eq((await import("@/lib/db/schema")).locations.id, data.locationId)))
+      .limit(1);
+    const facilityType = loc[0]?.facilityType ?? "school";
+
+    function timeToMin(t: string | null) {
+      if (!t || !t.includes(":")) return null;
+      const [h, m] = t.split(":").map(Number);
+      return h * 60 + m;
+    }
+
+    return rows.map((r) => {
+      const inM = timeToMin(r.inTime);
+      const outM = timeToMin(r.outTime);
+      const classEndM = timeToMin(r.classEndTime);
+      let daycareMinutes = 0;
+      if (inM != null && outM != null && outM > inM) {
+        if (facilityType === "daycare") {
+          daycareMinutes = outM - inM;
+        } else if (classEndM != null) {
+          const startM = Math.max(inM, classEndM);
+          if (outM > startM) daycareMinutes = outM - startM;
+        }
+      }
+      return {
+        ...r,
+        facilityType,
+        daycareMinutes,
+        daycareHours: +(daycareMinutes / 60).toFixed(2),
+      };
+    });
+  });
+
+const saveDaycareSessionsSchema = z.object({
+  schoolId: z.number(),
+  locationId: z.number(),
+  sessionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  sessions: z.array(z.object({
+    studentId: z.number(),
+    sessionId: z.number().optional(),
+    inTime: z.string().max(10).optional().or(z.literal("")),
+    outTime: z.string().max(10).optional().or(z.literal("")),
+    notes: z.string().max(1000).optional().or(z.literal("")),
+  })),
+});
+
+export const saveDaycareSessions = createServerFn({ method: "POST" })
+  .validator((input: unknown) => saveDaycareSessionsSchema.parse(input))
+  .handler(async ({ data }) => {
+    const user = await requireAuth(data.schoolId, data.locationId);
+    const allowed = ["super_admin", "school_admin", "location_admin", "teacher", "staff", "receptionist"];
+    if (!allowed.includes(user.role ?? "")) throw new Error("Not authorized");
+    await assertCanOperateForUser();
+
+    const { db } = await import("@/lib/db");
+    const { daycareSessions } = await import("@/lib/db/schema");
+
+    function validTime(t?: string) {
+      return t && /^([0-9]|0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$/.test(t) ? t : null;
+    }
+
+    for (const s of data.sessions) {
+      const inTime = validTime(s.inTime ?? undefined);
+      const outTime = validTime(s.outTime ?? undefined);
+      const notes = s.notes || null;
+
+      if (s.sessionId) {
+        if (!inTime && !outTime) {
+          await db.delete(daycareSessions).where(eq(daycareSessions.id, s.sessionId));
+        } else {
+          await db
+            .update(daycareSessions)
+            .set({ inTime, outTime, notes, recordedBy: user.userId })
+            .where(eq(daycareSessions.id, s.sessionId));
+        }
+      } else if (inTime || outTime) {
+        await db.insert(daycareSessions).values({
+          schoolId: data.schoolId,
+          locationId: data.locationId,
+          studentId: s.studentId,
+          sessionDate: new Date(data.sessionDate),
+          inTime,
+          outTime,
+          notes,
+          recordedBy: user.userId,
+        });
+      }
+    }
+
+    return { ok: true };
   });
 

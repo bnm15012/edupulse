@@ -27,7 +27,7 @@ type Invoice = {
 };
 type StudentOption = { id: number; firstName: string; lastName: string };
 type FeeStructure = {
-  id: number; name: string; amount: string; frequency: string;
+  id: number; name: string; amount: string; frequency: string; feeType: string;
   dueDay: number | null; description: string | null;
   classId: number | null; className: string | null; createdAt: string | null;
 };
@@ -262,7 +262,10 @@ function InvoiceDrawer({ invoice: initial, onClose, onUpdated }: {
 // ── Fee Structure Modal (Add / Edit) ──────────────────────────────────────
 
 const FREQ_LABELS: Record<string, string> = {
-  monthly: "Monthly", quarterly: "Quarterly", annually: "Annually", one_time: "One-time",
+  monthly: "Monthly", quarterly: "Quarterly", annually: "Annually", one_time: "One-time", hourly: "Hourly",
+};
+const FEE_TYPE_LABELS: Record<string, string> = {
+  school: "School fee", daycare_hourly: "Daycare (hourly)", daycare_monthly: "Daycare (monthly)",
 };
 
 function FeeStructureModal({ initial, onClose, onSaved, schoolId, locationId, classes }: {
@@ -277,7 +280,8 @@ function FeeStructureModal({ initial, onClose, onSaved, schoolId, locationId, cl
   const [f, setF] = useState({
     name: initial?.name ?? "",
     amount: initial?.amount ?? "",
-    frequency: (initial?.frequency ?? "monthly") as "monthly" | "quarterly" | "annually" | "one_time",
+    frequency: (initial?.frequency ?? "monthly") as "monthly" | "quarterly" | "annually" | "one_time" | "hourly",
+    feeType: (initial?.feeType ?? "school") as "school" | "daycare_hourly" | "daycare_monthly",
     dueDay: String(initial?.dueDay ?? "1"),
     classId: String(initial?.classId ?? ""),
     description: initial?.description ?? "",
@@ -288,9 +292,9 @@ function FeeStructureModal({ initial, onClose, onSaved, schoolId, locationId, cl
     e.preventDefault(); setSaving(true); setError("");
     try {
       if (initial) {
-        await updateFn({ data: { feeStructureId: initial.id, name: f.name, amount: f.amount, frequency: f.frequency, dueDay: parseInt(f.dueDay) || 1, classId: f.classId ? parseInt(f.classId) : undefined, description: f.description || undefined } });
+        await updateFn({ data: { feeStructureId: initial.id, name: f.name, amount: f.amount, frequency: f.frequency, feeType: f.feeType, dueDay: parseInt(f.dueDay) || 1, classId: f.classId ? parseInt(f.classId) : undefined, description: f.description || undefined } });
       } else {
-        await addFn({ data: { schoolId, locationId, name: f.name, amount: f.amount, frequency: f.frequency, dueDay: parseInt(f.dueDay) || 1, classId: f.classId ? parseInt(f.classId) : undefined, description: f.description || undefined } });
+        await addFn({ data: { schoolId, locationId, name: f.name, amount: f.amount, frequency: f.frequency, feeType: f.feeType, dueDay: parseInt(f.dueDay) || 1, classId: f.classId ? parseInt(f.classId) : undefined, description: f.description || undefined } });
       }
       onSaved();
     } catch (err: any) { setError(err?.message ?? "Failed"); }
@@ -319,6 +323,12 @@ function FeeStructureModal({ initial, onClose, onSaved, schoolId, locationId, cl
               <input type="number" min="0" step="0.01" value={f.amount} onChange={(e) => set("amount", e.target.value)} placeholder="4500" className={inputCls} required />
             </div>
             <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Fee type *</label>
+              <select value={f.feeType} onChange={(e) => set("feeType", e.target.value)} className={`${inputCls} bg-white`}>
+                {Object.entries(FEE_TYPE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </div>
+            <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1.5">Frequency *</label>
               <select value={f.frequency} onChange={(e) => set("frequency", e.target.value)} className={`${inputCls} bg-white`}>
                 {Object.entries(FREQ_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -328,7 +338,7 @@ function FeeStructureModal({ initial, onClose, onSaved, schoolId, locationId, cl
               <label className="block text-xs font-semibold text-slate-600 mb-1.5">Due day of month</label>
               <input type="number" min="1" max="31" value={f.dueDay} onChange={(e) => set("dueDay", e.target.value)} className={inputCls} />
             </div>
-            <div>
+            <div className="sm:col-span-2">
               <label className="block text-xs font-semibold text-slate-600 mb-1.5">Applicable class</label>
               <select value={f.classId} onChange={(e) => set("classId", e.target.value)} className={`${inputCls} bg-white`}>
                 <option value="">All classes</option>
@@ -418,6 +428,7 @@ function FeeStructuresTab({ schoolId, locationId, classes, isAdmin = true }: { s
               <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 <th className="px-5 py-3.5 w-16">S.No</th>
                 <th className="px-5 py-3.5">Name</th>
+                <th className="px-5 py-3.5">Type</th>
                 <th className="px-5 py-3.5">Amount</th>
                 <th className="px-5 py-3.5">Frequency</th>
                 <th className="px-5 py-3.5">Due day</th>
@@ -432,6 +443,9 @@ function FeeStructuresTab({ schoolId, locationId, classes, isAdmin = true }: { s
                   <td className="px-5 py-4">
                     <p className="font-semibold text-slate-900">{fs.name}</p>
                     {fs.description && <p className="text-xs text-slate-400 mt-0.5 truncate max-w-[200px]">{fs.description}</p>}
+                  </td>
+                  <td className="px-5 py-4">
+                    <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-slate-50 text-slate-600 border border-slate-200">{FEE_TYPE_LABELS[fs.feeType] ?? fs.feeType}</span>
                   </td>
                   <td className="px-5 py-4 font-bold text-violet-700">{fmt(fs.amount)}</td>
                   <td className="px-5 py-4">
