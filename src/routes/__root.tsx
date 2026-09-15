@@ -402,14 +402,23 @@ function AppShell() {
             if (parsed.schoolId === user.schoolId || user.role === "super_admin") needsReset = false;
           } catch { /* bad JSON — reset */ }
         }
-        const freshFields = { facilityType: (user as any).facilityType ?? "school", daycareEnabled: !!(user as any).daycareEnabled };
         if (needsReset) {
+          const freshFields = { facilityType: (user as any).facilityType ?? "school", daycareEnabled: !!(user as any).daycareEnabled };
           setTenant({ schoolId: user.schoolId, locationId: user.locationId, schoolName: "School", locationName: "Branch", ...freshFields });
         } else {
-          // Always refresh plan-gated fields in case branch type or plan changed
+          // For super_admin impersonating a school, getSession returns the super admin's own
+          // facilityType/daycareEnabled (null locationId → "school"/false). Don't overwrite
+          // the values that were set by viewAsSchoolAdmin — keep the stored ones.
           const stored = typeof window !== "undefined" ? localStorage.getItem("edupulse-tenant") : null;
           const base = stored ? JSON.parse(stored) : {};
-          setTenant({ ...base, ...freshFields });
+          if (user.role === "super_admin") {
+            // Just keep stored tenant as-is; only update if not impersonating
+            setTenant({ ...base });
+          } else {
+            // Normal user — always refresh plan-gated fields in case branch type or plan changed
+            const freshFields = { facilityType: (user as any).facilityType ?? "school", daycareEnabled: !!(user as any).daycareEnabled };
+            setTenant({ ...base, ...freshFields });
+          }
         }
       }
       setRole(user.role);
