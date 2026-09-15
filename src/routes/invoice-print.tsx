@@ -1,8 +1,8 @@
 import { createFileRoute, useSearch, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { getInvoicePrintData } from "@/lib/auth";
-import { Download, Printer, ArrowLeft } from "lucide-react";
+import { Download, Printer, ArrowLeft, Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/invoice-print")({
   component: InvoicePrint,
@@ -15,12 +15,35 @@ function InvoicePrint() {
   const getFn = useServerFn(getInvoicePrintData);
   const navigate = useNavigate();
   const [data, setData] = useState<any>(null);
+  const [downloading, setDownloading] = useState(false);
+  const invoiceRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     getFn({ data: { invoiceId: Number(invoiceId) } }).then(setData as any);
   }, [invoiceId]);
 
   const print = () => window.print();
+
+  const downloadPdf = async () => {
+    if (!invoiceRef.current) return;
+    setDownloading(true);
+    try {
+      const html2pdf = (await import("html2pdf.js")).default;
+      const filename = `invoice-${invoiceId}-${data?.invoice?.month ?? "draft"}.pdf`;
+      await html2pdf()
+        .set({
+          margin: 10,
+          filename,
+          image: { type: "jpeg", quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true },
+          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+        })
+        .from(invoiceRef.current)
+        .save();
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   if (!data) return <p className="p-8 text-sm text-slate-500">Loading invoice…</p>;
 
@@ -48,14 +71,15 @@ function InvoicePrint() {
             <button onClick={print} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg">
               <Printer className="w-4 h-4" /> Print / Save PDF
             </button>
-            <button onClick={print} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold rounded-lg">
-              <Download className="w-4 h-4" /> Download PDF
+            <button onClick={downloadPdf} disabled={downloading} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-900 disabled:bg-slate-500 text-white text-sm font-semibold rounded-lg transition">
+              {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              {downloading ? "Generating…" : "Download PDF"}
             </button>
           </div>
         </div>
 
         {/* Invoice card */}
-        <div className="bg-white p-10 shadow-lg rounded-2xl print:shadow-none print:rounded-none print:p-0">
+        <div ref={invoiceRef} className="bg-white p-10 shadow-lg rounded-2xl print:shadow-none print:rounded-none print:p-0">
 
           {/* Header */}
           <div className="flex items-start justify-between border-b-2 border-slate-100 pb-6 mb-6">
