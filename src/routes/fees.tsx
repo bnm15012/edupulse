@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -16,6 +16,9 @@ import { Pagination } from "@/components/pagination";
 
 export const Route = createFileRoute("/fees")({
   component: Fees,
+  validateSearch: (s: Record<string, unknown>) => ({
+    invoiceId: s.invoiceId ? Number(s.invoiceId) : undefined,
+  }),
 });
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -912,10 +915,13 @@ function Fees() {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterClass, setFilterClass] = useState<number | "all">("all");
+  const navigate = useNavigate();
+  const { invoiceId: viewingInvoiceId } = useSearch({ from: "/fees" });
+  const setViewingInvoiceId = (id: number | null) =>
+    navigate({ to: "/fees", search: id ? { invoiceId: id } : {}, replace: true });
   const [addOpen, setAddOpen] = useState(false);
   const [generateOpen, setGenerateOpen] = useState(false);
   const [selected, setSelected] = useState<Invoice | null>(null);
-  const [viewingInvoiceId, setViewingInvoiceId] = useState<number | null>(null);
   const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [confirmInvoice, setConfirmInvoice] = useState<Invoice | null>(null);
   const [cashPayInvoice, setCashPayInvoice] = useState<Invoice | null>(null);
