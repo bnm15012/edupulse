@@ -2000,18 +2000,29 @@ export const viewAsSchoolAdmin = createServerFn({ method: "POST" })
     if (!school) throw new Error("School not found");
 
     const [firstLocation] = await db
-      .select({ id: locations.id, name: locations.name })
+      .select({ id: locations.id, name: locations.name, facilityType: locations.facilityType })
       .from(locations)
       .where(and(eq(locations.schoolId, data.schoolId), eq(locations.status, "active")))
       .orderBy(asc(locations.name))
       .limit(1);
     if (!firstLocation) throw new Error("No active location for this school");
 
+    // Fetch daycareEnabled from the school's subscription
+    const { subscriptions } = await import("@/lib/db/schema");
+    const [sub] = await db
+      .select({ daycareEnabled: subscriptions.daycareEnabled })
+      .from(subscriptions)
+      .where(and(eq(subscriptions.schoolId, data.schoolId), inArray(subscriptions.status, ["active", "trialing"])))
+      .orderBy(subscriptions.id)
+      .limit(1);
+
     return {
       schoolId: data.schoolId,
       schoolName: school.name,
       locationId: firstLocation.id,
       locationName: firstLocation.name,
+      facilityType: firstLocation.facilityType ?? "school",
+      daycareEnabled: !!(sub?.daycareEnabled),
     };
   });
 
