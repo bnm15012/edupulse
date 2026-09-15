@@ -558,6 +558,7 @@ export const subscriptions = mysqlTable("subscriptions", {
   currentPeriodEnd: datetime("current_period_end"),
   trialEndsAt: datetime("trial_ends_at"),
   cancelAtPeriodEnd: int("cancel_at_period_end").default(0),
+  daycareEnabled: int("daycare_enabled").default(0), // per-school daycare add-on toggle
   startedAt: timestamp("started_at").defaultNow(),
   endedAt: datetime("ended_at"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -592,7 +593,6 @@ export const plans = mysqlTable("plans", {
   status: mysqlEnum("status", ["active", "inactive"]).default("active"),
   cta: varchar("cta", { length: 100 }).default("Get started"),
   ctaHref: varchar("cta_href", { length: 255 }).default("/signup"),
-  daycareEnabled: int("daycare_enabled").default(0), // 1 = plan includes daycare add-on
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 });

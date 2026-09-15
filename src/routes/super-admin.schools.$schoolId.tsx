@@ -6,6 +6,7 @@ import {
   updateSchoolSubscription,
   toggleSchoolStatus,
   viewAsSchoolAdmin,
+  toggleSchoolDaycare,
 } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { fmtDate } from "@/lib/utils";
@@ -30,6 +31,7 @@ type Location = { id: number; name: string; city: string | null; status: string 
 type Subscription = {
   id: number; plan: string; planId: number; amount: string | number; billingCycle: string | null;
   status: string | null; currentPeriodStart: any; currentPeriodEnd: any; startedAt: any;
+  daycareEnabled: number | null;
 };
 type Payment = {
   id: number; amount: number; status: string | null; paidAt: any;
@@ -177,9 +179,11 @@ function SchoolDetailPage() {
   const navigate  = useNavigate();
   const { setTenant } = useTenant();
 
-  const getDetailFn   = useServerFn(getSuperAdminSchoolDetail);
-  const toggleFn      = useServerFn(toggleSchoolStatus);
-  const viewFn        = useServerFn(viewAsSchoolAdmin);
+  const getDetailFn      = useServerFn(getSuperAdminSchoolDetail);
+  const toggleFn         = useServerFn(toggleSchoolStatus);
+  const viewFn           = useServerFn(viewAsSchoolAdmin);
+  const toggleDaycareFn  = useServerFn(toggleSchoolDaycare);
+  const [daycareToggling, setDaycareToggling] = useState(false);
 
   const [data, setData]           = useState<{ school: School; locations: Location[]; subscription: Subscription | null; payments: Payment[]; stats: { staffCount: number; studentCount: number } } | null>(null);
   const [loading, setLoading]     = useState(true);
@@ -206,6 +210,17 @@ function SchoolDetailPage() {
       setData((d) => d ? { ...d, school: { ...d.school, status: next } } : d);
     } catch (e: any) { setError(e?.message ?? "Toggle failed"); }
     finally { setToggling(false); }
+  };
+
+  const handleDaycareToggle = async () => {
+    if (!data?.subscription) return;
+    const next = !data.subscription.daycareEnabled;
+    setDaycareToggling(true);
+    try {
+      await toggleDaycareFn({ data: { schoolId, enabled: next } });
+      setData((d) => d ? { ...d, subscription: d.subscription ? { ...d.subscription, daycareEnabled: next ? 1 : 0 } : null } : d);
+    } catch (e: any) { setError(e?.message ?? "Toggle failed"); }
+    finally { setDaycareToggling(false); }
   };
 
   const handleView = async () => {
@@ -347,6 +362,21 @@ function SchoolDetailPage() {
                 <div>
                   <p className="text-xs text-slate-400 mb-1">Limits</p>
                   <p className="text-xs text-slate-600">{school.maxStudents ?? "∞"} students · {school.maxStaff ?? "∞"} staff · {school.maxLocations ?? "∞"} branches</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400 mb-2">Daycare add-on</p>
+                  <button
+                    onClick={handleDaycareToggle}
+                    disabled={daycareToggling}
+                    className={`inline-flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-lg border transition disabled:opacity-50 ${
+                      subscription.daycareEnabled
+                        ? "bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100"
+                        : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100"
+                    }`}
+                  >
+                    {daycareToggling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : subscription.daycareEnabled ? <CheckCircle2 className="w-3.5 h-3.5" /> : <span className="w-3.5 h-3.5 rounded-full border-2 border-slate-400 inline-block" />}
+                    {subscription.daycareEnabled ? "Enabled — click to disable" : "Disabled — click to enable"}
+                  </button>
                 </div>
               </div>
             ) : (

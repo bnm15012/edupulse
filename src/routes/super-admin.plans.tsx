@@ -19,7 +19,6 @@ type Plan = {
   cta: string | null;
   ctaHref: string | null;
   status: string;
-  daycareEnabled: boolean;
 };
 
 const inputCls = "w-full px-3 py-2 rounded-xl border border-slate-200 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm transition";
@@ -63,7 +62,6 @@ function PlansAdmin() {
           ctaHref: plan.ctaHref ?? "",
           featured: plan.featured,
           status: plan.status as "active" | "inactive",
-          daycareEnabled: plan.daycareEnabled,
         },
       });
       setSaved(plan.id);
@@ -194,7 +192,7 @@ function PlansAdmin() {
                   <option value="inactive">Inactive</option>
                 </select>
               </div>
-              <div className="flex flex-col gap-2 pb-1.5">
+              <div className="flex items-end pb-1.5">
                 <label className="inline-flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
                   <input
                     type="checkbox"
@@ -203,20 +201,6 @@ function PlansAdmin() {
                     className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                   />
                   Featured
-                </label>
-                <label className="inline-flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={plan.daycareEnabled}
-                    onChange={(e) => setField(plan.id, "daycareEnabled", e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
-                  />
-                  <span>
-                    Daycare add-on
-                    <span className="ml-1 text-[10px] font-semibold text-violet-600 bg-violet-50 border border-violet-200 px-1.5 py-0.5 rounded-full">
-                      {plan.daycareEnabled ? "Enabled" : "Disabled"}
-                    </span>
-                  </span>
                 </label>
               </div>
             </div>

@@ -404,28 +404,17 @@ export const getSession = createServerFn({ method: "GET" }).handler(async () => 
       facilityType = loc?.facilityType ?? "school";
     }
 
-    // Fetch daycareEnabled from the school's active plan
+    // Fetch daycareEnabled from the school's subscription (per-school add-on toggle)
     let daycareEnabled = false;
     if (user.schoolId) {
-      const { subscriptions, plans } = await import("@/lib/db/schema");
+      const { subscriptions } = await import("@/lib/db/schema");
       const [sub] = await db
-        .select({ daycareEnabled: plans.daycareEnabled })
+        .select({ daycareEnabled: subscriptions.daycareEnabled })
         .from(subscriptions)
-        .innerJoin(plans, eq(subscriptions.planId, plans.id))
-        .where(and(eq(subscriptions.schoolId, user.schoolId), eq(subscriptions.status, "active")))
+        .where(and(eq(subscriptions.schoolId, user.schoolId), inArray(subscriptions.status, ["active", "trialing"])))
+        .orderBy(subscriptions.id)
         .limit(1);
-      // Also check trialing subscriptions
-      if (!sub) {
-        const [trial] = await db
-          .select({ daycareEnabled: plans.daycareEnabled })
-          .from(subscriptions)
-          .innerJoin(plans, eq(subscriptions.planId, plans.id))
-          .where(and(eq(subscriptions.schoolId, user.schoolId), eq(subscriptions.status, "trialing")))
-          .limit(1);
-        daycareEnabled = !!(trial?.daycareEnabled);
-      } else {
-        daycareEnabled = !!(sub?.daycareEnabled);
-      }
+      daycareEnabled = !!(sub?.daycareEnabled);
     }
 
     return { ...user, facilityType, daycareEnabled };
@@ -1441,7 +1430,6 @@ export const getPlans = createServerFn({ method: "GET" }).handler(async () => {
       cta: plans.cta,
       ctaHref: plans.ctaHref,
       status: plans.status,
-      daycareEnabled: plans.daycareEnabled,
     })
     .from(plans)
     .where(eq(plans.status, "active"))
@@ -1450,7 +1438,6 @@ export const getPlans = createServerFn({ method: "GET" }).handler(async () => {
   return rows.map((r) => ({
     ...r,
     featured: Boolean(r.featured),
-    daycareEnabled: Boolean(r.daycareEnabled),
     features: (() => {
       if (!r.features) return [];
       try {
@@ -1473,7 +1460,6 @@ const updatePlanSchema = z.object({
   ctaHref: z.string().trim().max(255).optional(),
   featured: z.boolean().optional(),
   status: z.enum(["active", "inactive"]).optional(),
-  daycareEnabled: z.boolean().optional(),
 });
 
 export const updatePlan = createServerFn({ method: "POST" })
@@ -1508,7 +1494,6 @@ export const updatePlan = createServerFn({ method: "POST" })
     if (data.ctaHref !== undefined) update.ctaHref = data.ctaHref;
     if (data.featured !== undefined) update.featured = data.featured ? 1 : 0;
     if (data.status !== undefined) update.status = data.status;
-    if (data.daycareEnabled !== undefined) update.daycareEnabled = data.daycareEnabled ? 1 : 0;
 
     if (Object.keys(update).length === 0) return { ok: true };
 
@@ -1917,6 +1902,21 @@ export const updateSchoolSubscription = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+// ── Super Admin: toggle daycare add-on for a school ──────────────────────────
+export const toggleSchoolDaycare = createServerFn({ method: "POST" })
+  .validator((input: unknown) => z.object({ schoolId: z.number(), enabled: z.boolean() }).parse(input))
+  .handler(async ({ data }) => {
+    const userId = await requireSession();
+    const { db } = await import("@/lib/db");
+    const { users, subscriptions } = await import("@/lib/db/schema");
+    const [me] = await db.select({ role: users.role }).from(users).where(eq(users.id, userId)).limit(1);
+    if (!me || me.role !== "super_admin") throw new Error("Not authorized");
+    const [sub] = await db.select({ id: subscriptions.id }).from(subscriptions).where(eq(subscriptions.schoolId, data.schoolId)).limit(1);
+    if (!sub) throw new Error("No subscription found for this school");
+    await db.update(subscriptions).set({ daycareEnabled: data.enabled ? 1 : 0 }).where(eq(subscriptions.id, sub.id));
+    return { ok: true, daycareEnabled: data.enabled };
+  });
+
 // ── Super Admin: record a manual subscription payment ─────────────────────────
 const recordSubscriptionPaymentSchema = z.object({
   schoolId: z.number(),
@@ -2073,19 +2073,18 @@ async function assertCanOperateForUser() {
   await assertCanOperate(Number(user.schoolId ?? 0));
 }
 
-// Throws if the school's active subscription plan does not include the daycare add-on.
+// Throws if the school's subscription does not have the daycare add-on enabled.
 async function assertDaycareEnabled(schoolId: number) {
   const { db } = await import("@/lib/db");
-  const { subscriptions, plans } = await import("@/lib/db/schema");
+  const { subscriptions } = await import("@/lib/db/schema");
   const [row] = await db
-    .select({ daycareEnabled: plans.daycareEnabled })
+    .select({ daycareEnabled: subscriptions.daycareEnabled })
     .from(subscriptions)
-    .innerJoin(plans, eq(subscriptions.planId, plans.id))
     .where(and(eq(subscriptions.schoolId, schoolId), inArray(subscriptions.status, ["active", "trialing"])))
-    .orderBy(subscriptions.id) // take earliest if multiple
+    .orderBy(subscriptions.id)
     .limit(1);
   if (!row || !row.daycareEnabled) {
-    throw new Error("Daycare features are not included in your current plan. Please upgrade to access daycare.");
+    throw new Error("Daycare add-on is not enabled for your school. Please contact support to upgrade.");
   }
 }
 
