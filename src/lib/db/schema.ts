@@ -176,6 +176,7 @@ export const parents = mysqlTable("parents", {
   address: text("address"),
   isPrimary: int("is_primary").default(0),
   isEmergency: int("is_emergency").default(0),
+  userId: int("user_id").references(() => users.id),
 }, (t) => ({
   uniqueParentStudent: uniqueIndex("parents_student_email").on(t.studentId, t.email),
 }));
