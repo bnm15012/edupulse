@@ -8016,7 +8016,7 @@ export const listHolidays = createServerFn({ method: "GET" })
       .limit(1);
     if (!user) throw new Error("Not authenticated");
     if (user.schoolId !== data.schoolId) throw new Error("Not authorized");
-    if (user.role !== "super_admin" && user.locationId !== data.locationId) throw new Error("Not authorized");
+    if (!SCHOOL_WIDE_ROLES.has(user.role ?? "") && user.locationId !== data.locationId) throw new Error("Not authorized");
 
     const base = [eq(holidays.schoolId, data.schoolId), eq(holidays.locationId, data.locationId)];
     if (data.fromDate) base.push(gte(holidays.date, new Date(data.fromDate)));
@@ -8163,7 +8163,7 @@ export const getUpcomingHolidays = createServerFn({ method: "GET" })
       .limit(1);
     if (!user) throw new Error("Not authenticated");
     if (user.schoolId !== data.schoolId) throw new Error("Not authorized");
-    if (user.role !== "super_admin" && user.locationId !== data.locationId) throw new Error("Not authorized");
+    if (!SCHOOL_WIDE_ROLES.has(user.role ?? "") && user.locationId !== data.locationId) throw new Error("Not authorized");
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
