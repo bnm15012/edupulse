@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -179,6 +179,28 @@ function GenerateInvoiceModal({ onClose, onSaved, schoolId, locationId, students
   );
 }
 
+// ── View Invoice Button ────────────────────────────────────────────────────
+
+function ViewInvoiceBtn({ invoiceId, variant }: { invoiceId: number; variant: "row" | "drawer" }) {
+  const navigate = useNavigate();
+  const go = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigate({ to: "/invoice-print", search: { invoiceId } });
+  };
+  if (variant === "drawer") {
+    return (
+      <button onClick={go} className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 text-white text-xs font-semibold rounded-lg transition" title="View / Print invoice">
+        <FileText className="w-3.5 h-3.5" /> View
+      </button>
+    );
+  }
+  return (
+    <button onClick={go} className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition" title="View / Print invoice">
+      <FileText className="w-3.5 h-3.5" />
+    </button>
+  );
+}
+
 // ── Invoice Detail Drawer ──────────────────────────────────────────────────
 
 function InvoiceDrawer({ invoice: initial, onClose, onUpdated }: {
@@ -231,15 +253,7 @@ function InvoiceDrawer({ invoice: initial, onClose, onUpdated }: {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <a
-                href={`/invoice-print?invoiceId=${inv.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 text-white text-xs font-semibold rounded-lg transition"
-                title="View / Print invoice"
-              >
-                <FileText className="w-3.5 h-3.5" /> View
-              </a>
+              <ViewInvoiceBtn invoiceId={inv.id} variant="drawer" />
               {!editing && (
                 <button onClick={() => { setEf({ amount: inv.amount, dueDate: inv.dueDate ?? "", status: inv.status }); setEditing(true); }}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 text-white text-xs font-semibold rounded-lg transition">
@@ -993,16 +1007,7 @@ function Fees() {
                                 </button>
                               )}
                             </>)}
-                            <a
-                              href={`/invoice-print?invoiceId=${inv.id}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition"
-                              title="View / Print invoice"
-                            >
-                              <FileText className="w-3.5 h-3.5" />
-                            </a>
+                            <ViewInvoiceBtn invoiceId={inv.id} variant="row" />
                             <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-500 transition ml-1" />
                           </div>
                         </td>
