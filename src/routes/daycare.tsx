@@ -184,11 +184,7 @@ function DaycarePage() {
               ))}
             </select>
           </div>
-          {facilityType !== "school" && (
-            <div className="text-xs font-medium text-slate-500 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
-              Branch type: <span className="capitalize text-slate-700">{facilityType}</span>
-            </div>
-          )}
+
         </div>
 
         <div className="overflow-x-auto">
