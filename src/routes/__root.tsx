@@ -45,7 +45,7 @@ import { usePush } from "@/lib/usePush";
 
 export const publicPaths = [
   "/", "/about", "/contact", "/pricing", "/refund-policy", "/privacy-policy", "/terms-of-service",
-  "/login", "/signup", "/forgot-password", "/reset-password", "/invite",
+  "/login", "/signup", "/forgot-password", "/reset-password", "/invite", "/invoice-print",
 ];
 
 // Role → home route mapping
