@@ -190,7 +190,7 @@ export default function Holidays() {
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 <th className="px-5 py-3.5 w-16">S.No</th>
-                <th className="px-5 py-3.5 w-40">Date</th>
+                <th className="px-5 py-3.5 w-48">Date</th>
                 <th className="px-5 py-3.5">Name</th>
                 <th className="px-5 py-3.5">Type</th>
                 <th className="px-5 py-3.5 w-48">Class</th>
@@ -202,10 +202,10 @@ export default function Holidays() {
               {form && canEdit && (
                 <tr className="bg-slate-50">
                   <td className="px-5 py-3 text-slate-400 w-16 text-center font-semibold">—</td>
-                  <td className="px-5 py-3 w-40">
-                    <div className="space-y-2">
-                      <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className={inputCls + " bg-white"} required />
-                      <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+                  <td className="px-5 py-3 w-48">
+                    <div className="flex items-center gap-2">
+                      <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className={inputCls + " bg-white flex-1 min-w-0"} required />
+                      <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer whitespace-nowrap">
                         <input type="checkbox" checked={form.isRecurring} onChange={(e) => setForm({ ...form, isRecurring: e.target.checked })} className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
                         Annual
                       </label>
