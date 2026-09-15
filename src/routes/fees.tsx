@@ -21,7 +21,7 @@ export const Route = createFileRoute("/fees")({
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type Invoice = {
-  id: number; studentId: number; studentName: string;
+  id: number; studentId: number; studentName: string; className: string | null;
   amount: string; dueDate: string | null; status: string;
   paidAt: string | null; createdAt: string | null;
 };
@@ -583,6 +583,7 @@ function Fees() {
   const PAGE_SIZE = 12;
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [filterClass, setFilterClass] = useState<number | "all">("all");
   const [addOpen, setAddOpen] = useState(false);
   const [selected, setSelected] = useState<Invoice | null>(null);
   const [cancellingId, setCancellingId] = useState<number | null>(null);
@@ -606,12 +607,28 @@ function Fees() {
       .finally(() => setLoading(false));
   };
 
+  const loadInvoices = (classId: number | undefined) => {
+    setLoading(true);
+    listFn({ data: { schoolId: tenant.schoolId, locationId: tenant.locationId, classId } })
+      .then((inv) => setInvoices(inv as Invoice[]))
+      .catch((e) => setError(e?.message ?? "Failed to load"))
+      .finally(() => setLoading(false));
+  };
+
   useEffect(() => {
     load();
     // Auto-run fee automation on mount (overdue flip + monthly generation)
     runAutomationFn({ data: { schoolId: tenant.schoolId, locationId: tenant.locationId } })
       .catch(() => {}); // silent — non-fatal
   }, [tenant.schoolId, tenant.locationId]);
+
+  useEffect(() => {
+    if (filterClass !== "all") {
+      loadInvoices(filterClass);
+    } else {
+      loadInvoices(undefined);
+    }
+  }, [filterClass, tenant.schoolId, tenant.locationId]);
   useEffect(() => { sessionFn().then((u: any) => u && setIsAdmin(["super_admin","school_admin","location_admin"].includes(u.role))); }, []);
 
   const handleCancel = (inv: Invoice, e: React.MouseEvent) => {
@@ -739,6 +756,16 @@ function Fees() {
               <input type="text" placeholder="Search by student or status…" value={search} onChange={(e) => setSearch(e.target.value)}
                 className="pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm transition w-full sm:w-64" />
             </div>
+            <select
+              value={filterClass}
+              onChange={(e) => setFilterClass(e.target.value === "all" ? "all" : Number(e.target.value))}
+              className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm w-full sm:w-48"
+            >
+              <option value="all">All classes</option>
+              {classes.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
             <div className="flex gap-1.5 flex-wrap">
               <button onClick={() => setFilterStatus("all")} className={`px-3 py-1.5 text-xs font-semibold rounded-full border transition ${filterStatus === "all" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"}`}>
                 All ({invoices.length})
@@ -762,6 +789,7 @@ function Fees() {
                 <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
                   <th className="px-5 py-3.5 w-16">S.No</th>
                   <th className="px-5 py-3.5">Student</th>
+                  <th className="px-5 py-3.5">Class</th>
                   <th className="px-5 py-3.5">Amount</th>
                   <th className="px-5 py-3.5">Due date</th>
                   <th className="px-5 py-3.5">Status</th>
@@ -772,11 +800,11 @@ function Fees() {
               <tbody className="divide-y divide-slate-100">
                 {loading ? (
                   Array.from({ length: 3 }).map((_, i) => (
-                    <tr key={i}>{Array.from({ length: 7 }).map((__, j) => <td key={j} className="px-5 py-4"><div className="h-4 bg-slate-100 rounded animate-pulse" /></td>)}</tr>
+                    <tr key={i}>{Array.from({ length: 8 }).map((__, j) => <td key={j} className="px-5 py-4"><div className="h-4 bg-slate-100 rounded animate-pulse" /></td>)}</tr>
                   ))
                 ) : pageItems.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-5 py-14 text-center">
+                    <td colSpan={8} className="px-5 py-14 text-center">
                       <DollarSign className="w-10 h-10 mx-auto mb-3 text-slate-200" />
                       <p className="text-slate-400 text-sm">{invoices.length === 0 ? "No invoices yet. Create your first one!" : "No invoices match your search."}</p>
                     </td>
@@ -795,6 +823,7 @@ function Fees() {
                             <span className="font-semibold text-slate-900 group-hover:text-blue-700 transition">{inv.studentName}</span>
                           </div>
                         </td>
+                        <td className="px-5 py-4 text-slate-500">{inv.className ?? <span className="text-slate-300">—</span>}</td>
                         <td className="px-5 py-4 font-bold text-slate-800">{fmt(inv.amount)}</td>
                         <td className="px-5 py-4">
                           <span className={isOverdue ? "text-red-600 font-semibold" : "text-slate-500"}>

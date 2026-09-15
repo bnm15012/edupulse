@@ -3831,14 +3831,17 @@ export const resendStaffInvite = createServerFn({ method: "POST" })
 // FEES / INVOICES CRUD
 // ─────────────────────────────────────────────────────────────────────────────
 
-const listInvoicesSchema = z.object({ schoolId: z.number(), locationId: z.number() });
+const listInvoicesSchema = z.object({ schoolId: z.number(), locationId: z.number(), classId: z.number().optional() });
 
 export const listInvoices = createServerFn({ method: "GET" })
   .validator((input: unknown) => listInvoicesSchema.parse(input))
   .handler(async ({ data }) => {
     await requireAuth(data.schoolId, data.locationId);
     const { db } = await import("@/lib/db");
-    const { invoices, students } = await import("@/lib/db/schema");
+    const { invoices, students, classes } = await import("@/lib/db/schema");
+
+    const filters: any[] = [eq(invoices.schoolId, data.schoolId), eq(invoices.locationId, data.locationId)];
+    if (data.classId) filters.push(eq(students.currentClassId, data.classId));
 
     const rows = await db
       .select({
@@ -3852,10 +3855,12 @@ export const listInvoices = createServerFn({ method: "GET" })
         feeStructureId: invoices.feeStructureId,
         studentFirstName: students.firstName,
         studentLastName: students.lastName,
+        className: classes.name,
       })
       .from(invoices)
       .innerJoin(students, eq(invoices.studentId, students.id))
-      .where(and(eq(invoices.schoolId, data.schoolId), eq(invoices.locationId, data.locationId)))
+      .leftJoin(classes, eq(students.currentClassId, classes.id))
+      .where(and(...filters))
       .orderBy(desc(invoices.createdAt));
 
     return rows.map((r) => ({
