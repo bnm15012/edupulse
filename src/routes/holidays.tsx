@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Plus, X, Calendar, Loader2, AlertCircle, Trash2, Pencil, Save, CalendarDays } from "lucide-react";
-import { listHolidays, addHoliday, updateHoliday, deleteHoliday, getSession } from "@/lib/auth";
+import { listHolidays, addHoliday, updateHoliday, deleteHoliday, getSession, listClasses } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { useToast } from "@/lib/toast";
 import { fmtDate, todayIST } from "@/lib/utils";
@@ -19,8 +19,12 @@ type Holiday = {
   type: "holiday" | "event" | "exam" | "other";
   description: string | null;
   isRecurring: number;
+  classId: number | null;
+  className?: string | null;
   createdAt: string | null;
 };
+
+type ClassItem = { id: number; name: string };
 
 const TYPE_COLORS: Record<string, string> = {
   holiday: "bg-emerald-100 text-emerald-700",
@@ -39,15 +43,17 @@ export default function Holidays() {
   const updateFn = useServerFn(updateHoliday);
   const deleteFn = useServerFn(deleteHoliday);
   const sessionFn = useServerFn(getSession);
+  const classesFn = useServerFn(listClasses);
 
   const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [classes, setClasses] = useState<ClassItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [role, setRole] = useState<string>("");
   const [isAdmin, setIsAdmin] = useState(false);
 
   const [editing, setEditing] = useState<Holiday | null>(null);
-  const [form, setForm] = useState({ name: "", date: todayIST(), type: "holiday" as const, description: "", isRecurring: false });
+  const [form, setForm] = useState({ name: "", date: todayIST(), type: "holiday" as const, description: "", isRecurring: false, classId: "" });
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [confirmId, setConfirmId] = useState<number | null>(null);
@@ -59,9 +65,13 @@ export default function Holidays() {
     Promise.all([
       listFn({ data: { schoolId: tenant.schoolId, locationId: tenant.locationId } }),
       sessionFn(),
+      classesFn({ data: { schoolId: tenant.schoolId, locationId: tenant.locationId } }),
     ])
-      .then(([rows, session]) => {
-        setHolidays(rows as Holiday[]);
+      .then(([rows, session, classRows]) => {
+        const classList = (classRows as { id: number; name: string }[]).map((c) => ({ id: c.id, name: c.name }));
+        setClasses(classList);
+        const classNameById = new Map(classList.map((c) => [c.id, c.name]));
+        setHolidays((rows as any[]).map((h) => ({ ...h, className: h.classId ? classNameById.get(h.classId) ?? null : null })));
         const r = (session as any)?.role ?? "";
         setRole(r);
         setIsAdmin(["super_admin", "school_admin", "location_admin"].includes(r));
@@ -74,12 +84,12 @@ export default function Holidays() {
 
   const resetForm = () => {
     setEditing(null);
-    setForm({ name: "", date: todayIST(), type: "holiday", description: "", isRecurring: false });
+    setForm({ name: "", date: todayIST(), type: "holiday", description: "", isRecurring: false, classId: "" });
   };
 
   const startEdit = (h: Holiday) => {
     setEditing(h);
-    setForm({ name: h.name, date: h.date, type: h.type, description: h.description ?? "", isRecurring: h.isRecurring === 1 });
+    setForm({ name: h.name, date: h.date, type: h.type, description: h.description ?? "", isRecurring: h.isRecurring === 1, classId: h.classId?.toString() ?? "" });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -87,11 +97,12 @@ export default function Holidays() {
     if (!form.name.trim() || !form.date) return;
     setSaving(true);
     try {
+      const classId = form.classId ? Number(form.classId) : undefined;
       if (editing) {
-        await updateFn({ data: { holidayId: editing.id, ...form } });
+        await updateFn({ data: { holidayId: editing.id, ...form, classId } });
         toast("Holiday updated", "success");
       } else {
-        await addFn({ data: { schoolId: tenant.schoolId, locationId: tenant.locationId, ...form } });
+        await addFn({ data: { schoolId: tenant.schoolId, locationId: tenant.locationId, ...form, classId } });
         toast("Holiday added", "success");
       }
       resetForm();
@@ -134,7 +145,7 @@ export default function Holidays() {
             {editing ? <Pencil className="w-4 h-4 text-blue-500" /> : <Plus className="w-4 h-4 text-blue-500" />}
             {editing ? "Edit holiday" : "Add holiday"}
           </h2>
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1.5">Name *</label>
               <input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} placeholder="Diwali break" className={inputCls} required />
@@ -155,6 +166,15 @@ export default function Holidays() {
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1.5">Description</label>
               <input value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} placeholder="Optional note" className={inputCls} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Class (optional)</label>
+              <select value={form.classId} onChange={(e) => setForm((p) => ({ ...p, classId: e.target.value }))} className={inputCls}>
+                <option value="">All classes in this branch</option>
+                {classes.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
             </div>
             <div className="flex items-center gap-3">
               <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
@@ -193,6 +213,7 @@ export default function Holidays() {
                 <th className="px-5 py-3.5 w-40">Date</th>
                 <th className="px-5 py-3.5">Name</th>
                 <th className="px-5 py-3.5">Type</th>
+                <th className="px-5 py-3.5 w-48">Class</th>
                 <th className="px-5 py-3.5">Description</th>
                 {canEdit && <th className="px-5 py-3.5 text-right w-32">Actions</th>}
               </tr>
@@ -200,11 +221,11 @@ export default function Holidays() {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 Array.from({ length: 4 }).map((_, i) => (
-                  <tr key={i}>{Array.from({ length: canEdit ? 5 : 4 }).map((__, j) => <td key={j} className="px-5 py-4"><div className="h-4 bg-slate-100 rounded animate-pulse" /></td>)}</tr>
+                  <tr key={i}>{Array.from({ length: canEdit ? 6 : 5 }).map((__, j) => <td key={j} className="px-5 py-4"><div className="h-4 bg-slate-100 rounded animate-pulse" /></td>)}</tr>
                 ))
               ) : holidays.length === 0 ? (
                 <tr>
-                  <td colSpan={canEdit ? 5 : 4} className="px-5 py-14 text-center">
+                  <td colSpan={canEdit ? 6 : 5} className="px-5 py-14 text-center">
                     <CalendarDays className="w-10 h-10 mx-auto mb-3 text-slate-200" />
                     <p className="text-slate-400 text-sm">No holidays added yet.</p>
                   </td>
@@ -225,6 +246,7 @@ export default function Holidays() {
                         {h.type}
                       </span>
                     </td>
+                    <td className="px-5 py-4 text-slate-500">{h.classId ? h.className : <span className="text-slate-300 text-xs">All classes</span>}</td>
                     <td className="px-5 py-4 text-slate-500">{h.description ?? <span className="text-slate-300">—</span>}</td>
                     {canEdit && (
                       <td className="px-5 py-4">

@@ -7996,19 +7996,56 @@ const listHolidaysSchema = z.object({
 export const listHolidays = createServerFn({ method: "GET" })
   .validator((input: unknown) => listHolidaysSchema.parse(input))
   .handler(async ({ data }) => {
-    await requireAuth(data.schoolId, data.locationId);
     const { db } = await import("@/lib/db");
-    const { holidays } = await import("@/lib/db/schema");
+    const { holidays, users, staffClassAssignments, parents, students } = await import("@/lib/db/schema");
 
-    const conditions = [eq(holidays.schoolId, data.schoolId), eq(holidays.locationId, data.locationId)];
-    if (data.fromDate) conditions.push(gte(holidays.date, new Date(data.fromDate)));
-    if (data.toDate) conditions.push(lte(holidays.date, new Date(data.toDate)));
+    const req = getRequest();
+    const cookieHeader = req?.headers.get("cookie") ?? "";
+    const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${SESSION_COOKIE}=([^;]+)`));
+    const token = match?.[1];
+    if (!token) throw new Error("Not authenticated");
 
-    const rows = await db
-      .select()
-      .from(holidays)
-      .where(and(...conditions))
-      .orderBy(asc(holidays.date));
+    const { payload } = await verifySessionToken(token);
+    const userId = Number(payload.userId);
+    if (!userId) throw new Error("Not authenticated");
+
+    const [user] = await db
+      .select({ id: users.id, role: users.role, schoolId: users.schoolId, locationId: users.locationId, email: users.email })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!user) throw new Error("Not authenticated");
+    if (user.schoolId !== data.schoolId) throw new Error("Not authorized");
+    if (user.role !== "super_admin" && user.locationId !== data.locationId) throw new Error("Not authorized");
+
+    const base = [eq(holidays.schoolId, data.schoolId), eq(holidays.locationId, data.locationId)];
+    if (data.fromDate) base.push(gte(holidays.date, new Date(data.fromDate)));
+    if (data.toDate) base.push(lte(holidays.date, new Date(data.toDate)));
+
+    let rows: any[] = [];
+
+    if (["super_admin", "school_admin", "location_admin", "accountant"].includes(user.role ?? "")) {
+      rows = await db.select().from(holidays).where(and(...base)).orderBy(asc(holidays.date));
+    } else if (user.role === "teacher" || user.role === "staff") {
+      const assignments = await db
+        .select({ classId: staffClassAssignments.classId })
+        .from(staffClassAssignments)
+        .where(eq(staffClassAssignments.staffId, userId));
+      const classIds = assignments.map((a) => a.classId);
+      const conditions: any[] = [...base, or(isNull(holidays.classId), inArray(holidays.classId, classIds))];
+      rows = await db.select().from(holidays).where(and(...conditions)).orderBy(asc(holidays.date));
+    } else if (user.role === "parent") {
+      const children = await db
+        .select({ classId: students.currentClassId })
+        .from(parents)
+        .innerJoin(students, eq(parents.studentId, students.id))
+        .where(and(eq(parents.email, user.email ?? ""), eq(students.schoolId, data.schoolId), eq(students.locationId, data.locationId)));
+      const classIds = children.map((c) => c.classId).filter(Boolean) as number[];
+      const conditions: any[] = [...base, or(isNull(holidays.classId), inArray(holidays.classId, classIds))];
+      rows = await db.select().from(holidays).where(and(...conditions)).orderBy(asc(holidays.date));
+    } else {
+      throw new Error("Not authorized");
+    }
 
     return rows.map((h) => ({
       ...h,
@@ -8021,6 +8058,7 @@ export const listHolidays = createServerFn({ method: "GET" })
 const addHolidaySchema = z.object({
   schoolId: z.number(),
   locationId: z.number(),
+  classId: z.number().optional(),
   name: z.string().trim().min(1).max(255),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD
   type: z.enum(["holiday", "event", "exam", "other"]).default("holiday"),
@@ -8039,6 +8077,7 @@ export const addHoliday = createServerFn({ method: "POST" })
     const [res] = await db.insert(holidays).values({
       schoolId: data.schoolId,
       locationId: data.locationId,
+      classId: data.classId ?? null,
       name: data.name,
       date: new Date(data.date),
       type: data.type,
@@ -8051,6 +8090,7 @@ export const addHoliday = createServerFn({ method: "POST" })
 
 const updateHolidaySchema = z.object({
   holidayId: z.number(),
+  classId: z.number().optional(),
   name: z.string().trim().min(1).max(255),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   type: z.enum(["holiday", "event", "exam", "other"]).default("holiday"),
@@ -8068,6 +8108,7 @@ export const updateHoliday = createServerFn({ method: "POST" })
     await db
       .update(holidays)
       .set({
+        classId: data.classId ?? null,
         name: data.name,
         date: new Date(data.date),
         type: data.type,
@@ -8101,27 +8142,68 @@ const getUpcomingHolidaysSchema = z.object({
 export const getUpcomingHolidays = createServerFn({ method: "GET" })
   .validator((input: unknown) => getUpcomingHolidaysSchema.parse(input))
   .handler(async ({ data }) => {
-    await requireAuth(data.schoolId, data.locationId);
     const { db } = await import("@/lib/db");
-    const { holidays } = await import("@/lib/db/schema");
+    const { holidays, users, staffClassAssignments, parents, students } = await import("@/lib/db/schema");
+
+    // Read user from session
+    const req = getRequest();
+    const cookieHeader = req?.headers.get("cookie") ?? "";
+    const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${SESSION_COOKIE}=([^;]+)`));
+    const token = match?.[1];
+    if (!token) throw new Error("Not authenticated");
+
+    const { payload } = await verifySessionToken(token);
+    const userId = Number(payload.userId);
+    if (!userId) throw new Error("Not authenticated");
+
+    const [user] = await db
+      .select({ id: users.id, role: users.role, schoolId: users.schoolId, locationId: users.locationId, email: users.email })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!user) throw new Error("Not authenticated");
+    if (user.schoolId !== data.schoolId) throw new Error("Not authorized");
+    if (user.role !== "super_admin" && user.locationId !== data.locationId) throw new Error("Not authorized");
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const nextMonth = new Date(today);
     nextMonth.setMonth(nextMonth.getMonth() + 1);
 
-    const rows = await db
-      .select()
-      .from(holidays)
-      .where(
-        and(
-          eq(holidays.schoolId, data.schoolId),
-          eq(holidays.locationId, data.locationId),
-          gte(holidays.date, today),
-          lte(holidays.date, nextMonth)
-        )
-      )
-      .orderBy(asc(holidays.date));
+    const base = and(
+      eq(holidays.schoolId, data.schoolId),
+      eq(holidays.locationId, data.locationId),
+      gte(holidays.date, today),
+      lte(holidays.date, nextMonth)
+    );
+
+    let rows: any[] = [];
+
+    if (["super_admin", "school_admin", "location_admin", "accountant"].includes(user.role ?? "")) {
+      // Admins see all branch holidays + class-specific ones
+      rows = await db.select().from(holidays).where(base).orderBy(asc(holidays.date));
+    } else if (user.role === "teacher" || user.role === "staff") {
+      // Teachers see branch-wide + classes they are assigned to
+      const assignments = await db
+        .select({ classId: staffClassAssignments.classId })
+        .from(staffClassAssignments)
+        .where(eq(staffClassAssignments.staffId, userId));
+      const classIds = assignments.map((a) => a.classId);
+      const conditions: any[] = [base, or(isNull(holidays.classId), inArray(holidays.classId, classIds))];
+      rows = await db.select().from(holidays).where(and(...conditions)).orderBy(asc(holidays.date));
+    } else if (user.role === "parent") {
+      // Parents see branch-wide + their children's classes
+      const children = await db
+        .select({ classId: students.currentClassId })
+        .from(parents)
+        .innerJoin(students, eq(parents.studentId, students.id))
+        .where(and(eq(parents.email, user.email ?? ""), eq(students.schoolId, data.schoolId), eq(students.locationId, data.locationId)));
+      const classIds = children.map((c) => c.classId).filter(Boolean) as number[];
+      const conditions: any[] = [base, or(isNull(holidays.classId), inArray(holidays.classId, classIds))];
+      rows = await db.select().from(holidays).where(and(...conditions)).orderBy(asc(holidays.date));
+    } else {
+      throw new Error("Not authorized");
+    }
 
     return rows.map((h) => ({
       ...h,

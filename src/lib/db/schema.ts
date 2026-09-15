@@ -604,6 +604,7 @@ export const holidays = mysqlTable("holidays", {
   id:          int("id").primaryKey().autoincrement(),
   schoolId:    int("school_id").notNull().references(() => schools.id),
   locationId:  int("location_id").notNull().references(() => locations.id),
+  classId:     int("class_id").references(() => classes.id),
   name:        varchar("name", { length: 255 }).notNull(),
   date:        date("date").notNull(),
   type:        mysqlEnum("type", ["holiday", "event", "exam", "other"]).default("holiday"),
@@ -613,7 +614,7 @@ export const holidays = mysqlTable("holidays", {
   createdAt:   timestamp("created_at").defaultNow(),
   updatedAt:   timestamp("updated_at").defaultNow().onUpdateNow(),
 }, (t) => ({
-  uniqueHoliday: uniqueIndex("holidays_school_location_date").on(t.schoolId, t.locationId, t.date, t.name),
+  uniqueHoliday: uniqueIndex("holidays_school_location_class_date").on(t.schoolId, t.locationId, t.classId, t.date, t.name),
 }));
 
 // ── Relations ───────────────────────────────────────────────────────────────
