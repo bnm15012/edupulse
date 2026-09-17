@@ -6,6 +6,8 @@ import { listDaycareSessions, saveDaycareSessions, listClassesForSchool } from "
 import { useTenant } from "@/lib/tenant";
 import { useToast } from "@/lib/toast";
 import { todayIST } from "@/lib/utils";
+import { usePagination } from "@/lib/usePagination";
+import { Pagination } from "@/components/pagination";
 
 export const Route = createFileRoute("/daycare")({
   component: DaycarePage,
@@ -60,6 +62,9 @@ function DaycarePage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  const PAGE_SIZE = 20;
+  const { pageItems, currentPage, setCurrentPage, totalPages } = usePagination(rows, PAGE_SIZE);
+
   useEffect(() => {
     classesFn({ data: { schoolId: tenant.schoolId, locationId: tenant.locationId } })
       .then((c: any) => setClasses(c ?? []))
@@ -91,7 +96,7 @@ function DaycarePage() {
         notes: r.notes ?? "",
       })));
     } catch (err: any) {
-      toast.error(err?.message ?? "Failed to load sessions");
+      toast(err?.message ?? "Failed to load sessions", "error");
     } finally {
       setLoading(false);
     }
@@ -126,10 +131,10 @@ function DaycarePage() {
           sessions,
         },
       });
-      toast.success("Daycare sessions saved");
+      toast("Daycare sessions saved", "success");
       await load();
     } catch (err: any) {
-      toast.error(err?.message ?? "Failed to save");
+      toast(err?.message ?? "Failed to save", "error");
     } finally {
       setSaving(false);
     }
@@ -191,6 +196,7 @@ function DaycarePage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                <th className="px-4 py-3.5 w-14">S.No</th>
                 <th className="px-4 py-3.5">Student</th>
                 <th className="px-4 py-3.5">Class</th>
                 <th className="px-4 py-3.5">School ends</th>
@@ -203,22 +209,25 @@ function DaycarePage() {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
+                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
                     <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
                     Loading…
                   </td>
                 </tr>
               ) : !rows.length ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
+                  <td colSpan={8} className="px-4 py-10 text-center text-slate-400">
                     No students found for the selected class.
                   </td>
                 </tr>
               ) : (
-                rows.map((r) => {
+                pageItems.map((r, idx) => {
                   const hrs = formatHours(r.inTime, r.outTime, r.classEndTime, facilityType);
                   return (
                     <tr key={r.studentId} className="hover:bg-slate-50 transition">
+                      <td className="px-4 py-3 text-slate-400 text-center font-medium">
+                        {(currentPage - 1) * PAGE_SIZE + idx + 1}
+                      </td>
                       <td className="px-4 py-3 font-medium text-slate-900">
                         {r.firstName} {r.lastName}
                       </td>
@@ -263,6 +272,13 @@ function DaycarePage() {
             </tbody>
           </table>
         </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          totalItems={rows.length}
+          pageSize={PAGE_SIZE}
+        />
       </div>
     </div>
   );

@@ -199,9 +199,10 @@ export default function Holidays() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {form && canEdit && (
-                <tr className="bg-slate-50">
-                  <td className="px-5 py-3 text-slate-400 w-16 text-center font-semibold">—</td>
+              {/* New holiday row — only shown when adding (no id) */}
+              {form && canEdit && !form.id && (
+                <tr className="bg-blue-50 border-b border-blue-100">
+                  <td className="px-5 py-3 text-slate-400 w-16 text-center font-semibold">New</td>
                   <td className="px-5 py-3 w-48">
                     <div className="flex items-center gap-2">
                       <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className={inputCls + " bg-white flex-1 min-w-0"} required />
@@ -225,9 +226,7 @@ export default function Holidays() {
                   <td className="px-5 py-3 w-48">
                     <select value={form.classId} onChange={(e) => setForm({ ...form, classId: e.target.value })} className={inputCls + " bg-white"}>
                       <option value="">All classes in this branch</option>
-                      {classes.map((c) => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
+                      {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   </td>
                   <td className="px-5 py-3">
@@ -235,9 +234,7 @@ export default function Holidays() {
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center justify-end gap-2">
-                      <button onClick={cancelForm} className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg border border-red-200 text-red-600 bg-red-50 text-xs font-semibold transition hover:bg-red-100">
-                        <X className="w-3.5 h-3.5" /> Cancel
-                      </button>
+                      <button onClick={cancelForm} className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg border border-red-200 text-red-600 bg-red-50 text-xs font-semibold transition hover:bg-red-100"><X className="w-3.5 h-3.5" /> Cancel</button>
                       <button onClick={save} disabled={saving} className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white text-xs font-semibold transition">
                         {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} Save
                       </button>
@@ -261,36 +258,80 @@ export default function Holidays() {
                 </tr>
               ) : (
                 filteredHolidays.map((h, i) => (
-                  <tr key={h.id} className="hover:bg-slate-50 transition">
-                    <td className="px-5 py-4 text-slate-500 w-16">{i + 1}</td>
-                    <td className="px-5 py-4 font-medium text-slate-800 whitespace-nowrap w-40">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-slate-400" />
-                        {fmtDate(h.date)}
-                        {h.isRecurring === 1 && <span className="text-[10px] bg-slate-100 text-slate-500 rounded-full px-1.5 py-0.5">Annual</span>}
-                      </div>
-                    </td>
-                    <td className="px-5 py-4 font-semibold text-slate-900">{h.name}</td>
-                    <td className="px-5 py-4">
-                      <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full capitalize ${TYPE_COLORS[h.type] ?? TYPE_COLORS.other}`}>
-                        {h.type}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4 text-slate-500 w-48">{h.classId ? h.className : <span className="text-slate-300 text-xs">All classes</span>}</td>
-                    <td className="px-5 py-4 text-slate-500">{h.description ?? <span className="text-slate-300">—</span>}</td>
-                    {canEdit && (
-                      <td className="px-5 py-4">
-                        <div className="flex items-center justify-end gap-1">
-                          <button onClick={() => startEdit(h)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition">
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button onClick={() => setConfirmId(h.id)} disabled={deletingId === h.id} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-40">
-                            {deletingId === h.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  form && canEdit && form.id === h.id ? (
+                    /* Inline edit row — replaces the existing holiday row */
+                    <tr key={h.id} className="bg-amber-50 border-b border-amber-100">
+                      <td className="px-5 py-3 text-slate-400 w-16 text-center font-semibold">{i + 1}</td>
+                      <td className="px-5 py-3 w-48">
+                        <div className="flex items-center gap-2">
+                          <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className={inputCls + " bg-white flex-1 min-w-0"} required />
+                          <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer whitespace-nowrap">
+                            <input type="checkbox" checked={form.isRecurring} onChange={(e) => setForm({ ...form, isRecurring: e.target.checked })} className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                            Annual
+                          </label>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3">
+                        <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Diwali break" className={inputCls + " bg-white"} required />
+                      </td>
+                      <td className="px-5 py-3">
+                        <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as any })} className={inputCls + " bg-white"}>
+                          <option value="holiday">Holiday</option>
+                          <option value="event">Event</option>
+                          <option value="exam">Exam</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </td>
+                      <td className="px-5 py-3 w-48">
+                        <select value={form.classId} onChange={(e) => setForm({ ...form, classId: e.target.value })} className={inputCls + " bg-white"}>
+                          <option value="">All classes in this branch</option>
+                          {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-5 py-3">
+                        <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Optional note" className={inputCls + " bg-white"} />
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center justify-end gap-2">
+                          <button onClick={cancelForm} className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg border border-red-200 text-red-600 bg-red-50 text-xs font-semibold transition hover:bg-red-100"><X className="w-3.5 h-3.5" /> Cancel</button>
+                          <button onClick={save} disabled={saving} className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white text-xs font-semibold transition">
+                            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} Save
                           </button>
                         </div>
                       </td>
-                    )}
-                  </tr>
+                    </tr>
+                  ) : (
+                    <tr key={h.id} className="hover:bg-slate-50 transition">
+                      <td className="px-5 py-4 text-slate-500 w-16">{i + 1}</td>
+                      <td className="px-5 py-4 font-medium text-slate-800 whitespace-nowrap w-40">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-slate-400" />
+                          {fmtDate(h.date)}
+                          {h.isRecurring === 1 && <span className="text-[10px] bg-slate-100 text-slate-500 rounded-full px-1.5 py-0.5">Annual</span>}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 font-semibold text-slate-900">{h.name}</td>
+                      <td className="px-5 py-4">
+                        <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full capitalize ${TYPE_COLORS[h.type] ?? TYPE_COLORS.other}`}>
+                          {h.type}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 text-slate-500 w-48">{h.classId ? h.className : <span className="text-slate-300 text-xs">All classes</span>}</td>
+                      <td className="px-5 py-4 text-slate-500">{h.description ?? <span className="text-slate-300">—</span>}</td>
+                      {canEdit && (
+                        <td className="px-5 py-4">
+                          <div className="flex items-center justify-end gap-1">
+                            <button onClick={() => startEdit(h)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition">
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => setConfirmId(h.id)} disabled={deletingId === h.id} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-40">
+                              {deletingId === h.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  )
                 ))
               )}
             </tbody>

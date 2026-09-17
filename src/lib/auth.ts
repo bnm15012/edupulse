@@ -2184,17 +2184,31 @@ export const listStudents = createServerFn({ method: "GET" })
           .limit(1);
 
         let className: string | null = null;
-        if (s.currentClassId) {
+        let currentClassId = s.currentClassId;
+        if (currentClassId) {
           const [cls] = await db
             .select({ name: classes.name })
             .from(classes)
-            .where(eq(classes.id, s.currentClassId))
+            .where(eq(classes.id, currentClassId))
             .limit(1);
           className = cls?.name ?? null;
+        } else {
+          // Fall back to class_enrollments if currentClassId is not set
+          const [enrollment] = await db
+            .select({ classId: classEnrollments.classId, className: classes.name })
+            .from(classEnrollments)
+            .innerJoin(classes, eq(classEnrollments.classId, classes.id))
+            .where(and(eq(classEnrollments.studentId, s.id), eq(classEnrollments.status, "active")))
+            .limit(1);
+          if (enrollment) {
+            currentClassId = enrollment.classId;
+            className = enrollment.className;
+          }
         }
 
         return {
           ...s,
+          currentClassId,
           parentName: anyParent?.name ?? null,
           parentPhone: anyParent?.phone ?? null,
           className,
