@@ -2386,19 +2386,73 @@ const addStudentSchema = z.object({
   locationId: z.number(),
   firstName: z.string().trim().min(1).max(255),
   lastName: z.string().trim().max(255).default(""),
+  nickName: z.string().trim().max(100).optional(),
   dateOfBirth: z.string().optional(),
   gender: z.enum(["male", "female", "other", "prefer_not_to_say"]).optional(),
   bloodGroup: z.string().trim().max(10).optional(),
+  nationality: z.string().trim().max(100).optional(),
+  religion: z.string().trim().max(100).optional(),
+  category: z.enum(["general", "obc", "sc", "st", "ews", "other"]).optional(),
+  aadharNumber: z.string().trim().max(20).optional(),
+  birthCertificateNumber: z.string().trim().max(100).optional(),
   currentClassId: z.number().optional(),
-  // Parent
+  // Academic
+  academicYear: z.string().trim().max(20).optional(),
+  previousSchoolName: z.string().trim().max(255).optional(),
+  previousSchoolTC: z.string().trim().max(100).optional(),
+  medium: z.enum(["english", "hindi", "regional", "other"]).optional(),
+  // Daycare
+  daycareType: z.enum(["full_day", "half_day", "extended_hour", "not_enrolled"]).optional(),
+  daycareDays: z.string().trim().max(200).optional(),
+  authorizedPickupPersons: z.string().max(2000).optional(), // JSON string
+  mealPreference: z.enum(["veg", "non_veg", "jain", "vegan", "no_preference"]).optional(),
+  // Transport
+  transportRequired: z.boolean().optional(),
+  transportRoute: z.string().trim().max(255).optional(),
+  // Sibling
+  siblingStudentId: z.number().optional(),
+  // Consents
+  photoVideoConsent: z.boolean().optional(),
+  medicalTreatmentConsent: z.boolean().optional(),
+  dataPrivacyConsent: z.boolean().optional(),
+  // Primary parent
   parentName: z.string().trim().min(1).max(255),
   parentEmail: z.string().trim().email().max(255).optional().or(z.literal("")),
   parentPhone: z.string().trim().max(50).optional(),
+  parentAlternatePhone: z.string().trim().max(50).optional(),
   parentRelation: z.enum(["mother", "father", "guardian", "other"]).default("guardian"),
+  parentAddress: z.string().trim().max(1000).optional(),
+  parentQualification: z.string().trim().max(255).optional(),
+  parentOccupation: z.string().trim().max(255).optional(),
+  parentOrganisation: z.string().trim().max(255).optional(),
+  parentDesignation: z.string().trim().max(255).optional(),
+  parentOfficeAddress: z.string().trim().max(1000).optional(),
+  parentOfficePhone: z.string().trim().max(50).optional(),
+  parentWorkTimings: z.string().trim().max(100).optional(),
+  parentAadhar: z.string().trim().max(20).optional(),
+  // Second parent (optional)
+  parent2Name: z.string().trim().max(255).optional(),
+  parent2Email: z.string().trim().email().max(255).optional().or(z.literal("")),
+  parent2Phone: z.string().trim().max(50).optional(),
+  parent2AlternatePhone: z.string().trim().max(50).optional(),
+  parent2Relation: z.enum(["mother", "father", "guardian", "other"]).optional(),
+  parent2Qualification: z.string().trim().max(255).optional(),
+  parent2Occupation: z.string().trim().max(255).optional(),
+  parent2Organisation: z.string().trim().max(255).optional(),
+  parent2Designation: z.string().trim().max(255).optional(),
+  parent2OfficeAddress: z.string().trim().max(1000).optional(),
+  parent2OfficePhone: z.string().trim().max(50).optional(),
+  parent2WorkTimings: z.string().trim().max(100).optional(),
+  parent2Aadhar: z.string().trim().max(20).optional(),
   // Medical
   allergies: z.string().max(1000).optional(),
   conditions: z.string().max(1000).optional(),
   medications: z.string().max(1000).optional(),
+  specialNeeds: z.string().max(1000).optional(),
+  immunizationRecord: z.string().max(2000).optional(),
+  doctorName: z.string().trim().max(255).optional(),
+  doctorPhone: z.string().trim().max(50).optional(),
+  doctorAddress: z.string().trim().max(500).optional(),
   medicalNotes: z.string().max(2000).optional(),
   // Emergency contact
   emergencyName: z.string().trim().max(255).optional(),
@@ -2450,9 +2504,29 @@ export const addStudent = createServerFn({ method: "POST" })
       locationId: data.locationId,
       firstName: data.firstName,
       lastName: data.lastName,
+      nickName: data.nickName || null,
       dateOfBirth,
       gender: data.gender ?? null,
       bloodGroup: data.bloodGroup || null,
+      nationality: data.nationality || null,
+      religion: data.religion || null,
+      category: data.category ?? null,
+      aadharNumber: data.aadharNumber || null,
+      birthCertificateNumber: data.birthCertificateNumber || null,
+      academicYear: data.academicYear || null,
+      previousSchoolName: data.previousSchoolName || null,
+      previousSchoolTC: data.previousSchoolTC || null,
+      medium: data.medium ?? null,
+      daycareType: data.daycareType ?? "not_enrolled",
+      daycareDays: data.daycareDays || null,
+      authorizedPickupPersons: data.authorizedPickupPersons || null,
+      mealPreference: data.mealPreference ?? "no_preference",
+      transportRequired: data.transportRequired ? 1 : 0,
+      transportRoute: data.transportRoute || null,
+      siblingStudentId: data.siblingStudentId ?? null,
+      photoVideoConsent: data.photoVideoConsent ? 1 : 0,
+      medicalTreatmentConsent: data.medicalTreatmentConsent ? 1 : 0,
+      dataPrivacyConsent: data.dataPrivacyConsent ? 1 : 0,
       currentClassId: data.currentClassId ?? null,
       status: "enrolled",
     });
@@ -2463,6 +2537,7 @@ export const addStudent = createServerFn({ method: "POST" })
     const admissionNumber = generateAdmissionNumber(schoolRow?.name ?? "School", studentId);
     await db.update(students).set({ admissionNumber }).where(eq(students.id, studentId));
 
+    // Primary parent
     await db.insert(parents).values({
       schoolId: data.schoolId,
       locationId: data.locationId,
@@ -2470,12 +2545,47 @@ export const addStudent = createServerFn({ method: "POST" })
       name: data.parentName,
       email: data.parentEmail ? normalizeEmail(data.parentEmail) : null,
       phone: data.parentPhone || null,
+      alternatePhone: data.parentAlternatePhone || null,
+      address: data.parentAddress || null,
       relation: data.parentRelation,
+      qualification: data.parentQualification || null,
+      occupation: data.parentOccupation || null,
+      organisation: data.parentOrganisation || null,
+      designation: data.parentDesignation || null,
+      officeAddress: data.parentOfficeAddress || null,
+      officePhone: data.parentOfficePhone || null,
+      workTimings: data.parentWorkTimings || null,
+      aadharNumber: data.parentAadhar || null,
       isPrimary: 1,
       isEmergency: 0,
     });
 
-    if (data.allergies || data.conditions || data.medications || data.medicalNotes) {
+    // Second parent (optional)
+    if (data.parent2Name) {
+      await db.insert(parents).values({
+        schoolId: data.schoolId,
+        locationId: data.locationId,
+        studentId,
+        name: data.parent2Name,
+        email: data.parent2Email ? normalizeEmail(data.parent2Email) : null,
+        phone: data.parent2Phone || null,
+        alternatePhone: data.parent2AlternatePhone || null,
+        relation: data.parent2Relation ?? "other",
+        qualification: data.parent2Qualification || null,
+        occupation: data.parent2Occupation || null,
+        organisation: data.parent2Organisation || null,
+        designation: data.parent2Designation || null,
+        officeAddress: data.parent2OfficeAddress || null,
+        officePhone: data.parent2OfficePhone || null,
+        workTimings: data.parent2WorkTimings || null,
+        aadharNumber: data.parent2Aadhar || null,
+        isPrimary: 0,
+        isEmergency: 0,
+      });
+    }
+
+    if (data.allergies || data.conditions || data.medications || data.medicalNotes ||
+        data.specialNeeds || data.immunizationRecord || data.doctorName) {
       await db.insert(medicalNotes).values({
         schoolId: data.schoolId,
         locationId: data.locationId,
@@ -2483,6 +2593,11 @@ export const addStudent = createServerFn({ method: "POST" })
         allergies: data.allergies || null,
         conditions: data.conditions || null,
         medications: data.medications || null,
+        specialNeeds: data.specialNeeds || null,
+        immunizationRecord: data.immunizationRecord || null,
+        doctorName: data.doctorName || null,
+        doctorPhone: data.doctorPhone || null,
+        doctorAddress: data.doctorAddress || null,
         notes: data.medicalNotes || null,
       });
     }

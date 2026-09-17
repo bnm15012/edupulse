@@ -152,9 +152,35 @@ export const students = mysqlTable("students", {
   admissionNumber: varchar("admission_number", { length: 50 }),
   firstName: varchar("first_name", { length: 255 }).notNull(),
   lastName: varchar("last_name", { length: 255 }).notNull(),
+  nickName: varchar("nick_name", { length: 100 }),
   dateOfBirth: date("date_of_birth"),
   gender: mysqlEnum("gender", ["male", "female", "other", "prefer_not_to_say"]),
   bloodGroup: varchar("blood_group", { length: 10 }),
+  nationality: varchar("nationality", { length: 100 }),
+  religion: varchar("religion", { length: 100 }),
+  category: mysqlEnum("category", ["general", "obc", "sc", "st", "ews", "other"]),
+  aadharNumber: varchar("aadhar_number", { length: 20 }),
+  birthCertificateNumber: varchar("birth_certificate_number", { length: 100 }),
+  // Academic
+  academicYear: varchar("academic_year", { length: 20 }),
+  previousSchoolName: varchar("previous_school_name", { length: 255 }),
+  previousSchoolTC: varchar("previous_school_tc", { length: 100 }),
+  medium: mysqlEnum("medium", ["english", "hindi", "regional", "other"]),
+  // Daycare-specific
+  daycareType: mysqlEnum("daycare_type", ["full_day", "half_day", "extended_hour", "not_enrolled"]).default("not_enrolled"),
+  daycareDays: varchar("daycare_days", { length: 200 }), // comma-separated e.g. "Mon,Tue,Wed"
+  authorizedPickupPersons: text("authorized_pickup_persons"), // JSON array of {name, relation, phone}
+  mealPreference: mysqlEnum("meal_preference", ["veg", "non_veg", "jain", "vegan", "no_preference"]).default("no_preference"),
+  // Transport
+  transportRequired: int("transport_required").default(0),
+  transportRoute: varchar("transport_route", { length: 255 }),
+  // Sibling
+  siblingStudentId: int("sibling_student_id"),
+  // Consents
+  photoVideoConsent: int("photo_video_consent").default(0),
+  medicalTreatmentConsent: int("medical_treatment_consent").default(0),
+  dataPrivacyConsent: int("data_privacy_consent").default(0),
+  // Misc
   photoUrl: varchar("photo_url", { length: 500 }),
   status: mysqlEnum("status", ["inquiry", "applied", "waitlisted", "enrolled", "graduated", "withdrawn"]).default("inquiry"),
   currentClassId: int("current_class_id").references(() => classes.id),
@@ -173,7 +199,18 @@ export const parents = mysqlTable("parents", {
   name: varchar("name", { length: 255 }).notNull(),
   email: varchar("email", { length: 255 }),
   phone: varchar("phone", { length: 50 }),
+  alternatePhone: varchar("alternate_phone", { length: 50 }),
   address: text("address"),
+  // Professional details (from daycare form)
+  qualification: varchar("qualification", { length: 255 }),
+  occupation: varchar("occupation", { length: 255 }),
+  organisation: varchar("organisation", { length: 255 }),
+  designation: varchar("designation", { length: 255 }),
+  officeAddress: text("office_address"),
+  officePhone: varchar("office_phone", { length: 50 }),
+  workTimings: varchar("work_timings", { length: 100 }),
+  aadharNumber: varchar("aadhar_number", { length: 20 }),
+  annualIncome: varchar("annual_income", { length: 50 }),
   isPrimary: int("is_primary").default(0),
   isEmergency: int("is_emergency").default(0),
   userId: int("user_id").references(() => users.id),
@@ -198,9 +235,14 @@ export const medicalNotes = mysqlTable("medical_notes", {
   schoolId: int("school_id").notNull().references(() => schools.id),
   locationId: int("location_id").notNull().references(() => locations.id),
   studentId: int("student_id").notNull().references(() => students.id),
-  allergies: text("allergies"),
-  conditions: text("conditions"),
-  medications: text("medications"),
+  allergies: text("allergies"),         // food, medicine, other
+  conditions: text("conditions"),       // chronic/recurring illnesses
+  medications: text("medications"),     // daily medications
+  specialNeeds: text("special_needs"),  // physical, learning, speech disabilities
+  immunizationRecord: text("immunization_record"), // free-text or JSON summary
+  doctorName: varchar("doctor_name", { length: 255 }),
+  doctorPhone: varchar("doctor_phone", { length: 50 }),
+  doctorAddress: text("doctor_address"),
   notes: text("notes"),
 });
 
