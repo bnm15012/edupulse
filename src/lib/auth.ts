@@ -451,13 +451,17 @@ export const forgotPassword = createServerFn({ method: "POST" })
     });
     const otpId = Number((insertResult as any).insertId);
 
-    const { sendOtpEmail } = await import("@/lib/email");
-    try {
-      await sendOtpEmail(email, code);
-    } catch (e) {
-      console.error("Failed to send OTP email:", e);
-      await db.delete(otps).where(eq(otps.id, otpId));
-      throw new Error("Could not send password reset email. Please check the SMTP configuration.");
+    if (process.env.SKIP_OTP_EMAIL !== "true") {
+      const { sendOtpEmail } = await import("@/lib/email");
+      try {
+        await sendOtpEmail(email, code);
+      } catch (e) {
+        console.error("Failed to send OTP email:", e);
+        await db.delete(otps).where(eq(otps.id, otpId));
+        throw new Error("Could not send password reset email. Please check the SMTP configuration.");
+      }
+    } else {
+      console.info(`[DEV] OTP for ${email}: ${code}`);
     }
 
     return { ok: true };
@@ -4769,13 +4773,14 @@ export const markStaffAttendance = createServerFn({ method: "POST" })
     const { db } = await import("@/lib/db");
     const { staffAttendance } = await import("@/lib/db/schema");
     // Upsert: delete existing record for same staffId+date, then insert
+    const staffDateStr = data.date.slice(0, 10) as unknown as Date;
     await db.delete(staffAttendance).where(
-      and(eq(staffAttendance.staffId, data.staffId), eq(staffAttendance.date, new Date(data.date)))
+      and(eq(staffAttendance.staffId, data.staffId), eq(staffAttendance.date, staffDateStr))
     );
     await db.insert(staffAttendance).values({
       schoolId: data.schoolId, locationId: data.locationId,
       staffId: data.staffId,
-      date: new Date(data.date),
+      date: staffDateStr,
       status: data.status,
       notes: data.notes || null,
     });
@@ -4806,7 +4811,7 @@ export const getAttendanceForDate = createServerFn({ method: "GET" })
         and(
           eq(staffAttendance.schoolId, data.schoolId),
           eq(staffAttendance.locationId, data.locationId),
-          eq(staffAttendance.date, new Date(data.date))
+          eq(staffAttendance.date, data.date.slice(0, 10) as unknown as Date)
         )
       );
   });
@@ -4971,7 +4976,9 @@ export const markStudentAttendance = createServerFn({ method: "POST" })
     const { db } = await import("@/lib/db");
     const { studentAttendance, attendanceSessions } = await import("@/lib/db/schema");
 
-    const dateObj = new Date(data.date);
+    // Normalise to YYYY-MM-DD string (Drizzle date columns need this format)
+    const dateStr = data.date.slice(0, 10); // handles ISO strings and full Date strings
+    const dateObj = dateStr as unknown as Date; // Drizzle accepts YYYY-MM-DD string for date columns
 
     // 1. Upsert attendance session — marks that attendance WAS taken for this class+date
     await db.delete(attendanceSessions).where(
@@ -5057,7 +5064,7 @@ export const getStudentAttendanceForDate = createServerFn({ method: "GET" })
     const { db } = await import("@/lib/db");
     const { studentAttendance, attendanceSessions, students, daycareSessions, locations } = await import("@/lib/db/schema");
 
-    const dateObj = new Date(data.date);
+    const dateObj = data.date.slice(0, 10) as unknown as Date;
 
     // Check if attendance was taken at all for this class+date
     const [session] = await db
@@ -8555,7 +8562,7 @@ export const addHoliday = createServerFn({ method: "POST" })
       locationId: data.locationId,
       classId: data.classId ?? null,
       name: data.name,
-      date: new Date(data.date),
+      date: data.date.slice(0, 10) as unknown as Date,
       type: data.type,
       description: data.description || null,
       isRecurring: data.isRecurring ? 1 : 0,
