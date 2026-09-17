@@ -62,7 +62,7 @@ function AcademicsPage() {
   const [subjectForm, setSubjectForm] = useState<{ id?: number; name: string; code: string } | null>(null);
   const [savingSubject, setSavingSubject] = useState(false);
 
-  // Class subjects — per-class expanded view with inline add
+  // Class subjects — per-class expanded view with inline add/edit
   const [selectedClass, setSelectedClass] = useState<number>(0);
   const [classSubjectIds, setClassSubjectIds] = useState<number[]>([]);
   const [expandedClassId, setExpandedClassId] = useState<number | null>(null);
@@ -74,6 +74,10 @@ function AcademicsPage() {
   const [savingNewSubject, setSavingNewSubject] = useState(false);
   const [removingSubjectId, setRemovingSubjectId] = useState<number | null>(null);
   const [subjectSearch, setSubjectSearch] = useState("");
+  // Inline edit state for existing subjects
+  const [editingSubjectId, setEditingSubjectId] = useState<number | null>(null);
+  const [editSubjectForm, setEditSubjectForm] = useState<{ name: string; code: string }>({ name: "", code: "" });
+  const [savingEditSubject, setSavingEditSubject] = useState(false);
 
   // Timetable
   const [tt, setTt] = useState<TT[]>([]);
@@ -134,42 +138,37 @@ function AcademicsPage() {
         ))}
       </div>
 
-      {/* Subjects — tabular view with search */}
+      {/* Subjects — card-based accordion view */}
       {activeTab === "subjects" && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="space-y-3">
           {/* Header + search */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-6 py-4 border-b border-slate-100">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-bold text-slate-800">Subjects by Class</h2>
-              <p className="text-xs text-slate-400 mt-0.5">Expand a class to manage its subjects.</p>
+              <p className="text-xs text-slate-400 mt-0.5">Click a class to manage its subjects.</p>
             </div>
-            <div className="relative w-full sm:w-56">
+            <div className="relative w-full sm:w-60">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
               <input
                 value={subjectSearch}
                 onChange={(e) => setSubjectSearch(e.target.value)}
                 placeholder="Search class or subject…"
-                className="w-full pl-8 pr-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
+                className="w-full pl-8 pr-3 py-2 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
               />
             </div>
           </div>
 
-          {/* Table header */}
-          <div className="grid grid-cols-12 px-6 py-2 bg-slate-50 border-b border-slate-100 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-            <div className="col-span-3">Class</div>
-            <div className="col-span-4">Subject</div>
-            <div className="col-span-3">Code</div>
-            <div className="col-span-2 text-right">Action</div>
-          </div>
-
-          {classes.length === 0 && <p className="text-sm text-slate-400 text-center py-10">No classes found. Add classes first.</p>}
+          {classes.length === 0 && (
+            <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center text-sm text-slate-400">
+              No classes found. Add classes first.
+            </div>
+          )}
 
           {classes
             .filter((c) => {
               if (!subjectSearch) return true;
               const q = subjectSearch.toLowerCase();
               if (c.name.toLowerCase().includes(q)) return true;
-              // also show if any assigned subject matches
               const csubs = classSubjectsMap[c.id] ?? [];
               return csubs.some((s) => s.name.toLowerCase().includes(q) || (s.code ?? "").toLowerCase().includes(q));
             })
@@ -177,17 +176,18 @@ function AcademicsPage() {
               const isOpen = expandedClassId === c.id;
               const csubs = classSubjectsMap[c.id] ?? [];
               const isAddingHere = addingSubjectForClass === c.id;
+              const loaded = classSubjectsMap[c.id] !== undefined;
               const filteredSubs = subjectSearch
                 ? csubs.filter((s) => s.name.toLowerCase().includes(subjectSearch.toLowerCase()) || (s.code ?? "").toLowerCase().includes(subjectSearch.toLowerCase()))
                 : csubs;
 
               return (
-                <div key={c.id} className="border-b border-slate-100 last:border-0">
-                  {/* Class header row */}
+                <div key={c.id} className={`bg-white rounded-2xl border transition-all ${isOpen ? "border-blue-200 shadow-md" : "border-slate-200 shadow-sm hover:border-slate-300"}`}>
+                  {/* Class header — clickable to expand/collapse */}
                   <button
-                    className="w-full grid grid-cols-12 items-center px-6 py-3.5 hover:bg-slate-50 transition text-left"
+                    className="w-full flex items-center justify-between px-5 py-4 text-left"
                     onClick={async () => {
-                      if (isOpen) { setExpandedClassId(null); setAddingSubjectForClass(null); return; }
+                      if (isOpen) { setExpandedClassId(null); setAddingSubjectForClass(null); setEditingSubjectId(null); return; }
                       setExpandedClassId(c.id);
                       if (!classSubjectsMap[c.id]) {
                         const d = await getClassSubjectsFn({ data: { classId: c.id } });
@@ -195,81 +195,169 @@ function AcademicsPage() {
                       }
                     }}
                   >
-                    <div className="col-span-3 flex items-center gap-2">
-                      {isOpen ? <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />}
+                    <div className="flex items-center gap-3">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 ${isOpen ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600"}`}>
+                        {c.name.slice(0, 2).toUpperCase()}
+                      </div>
                       <div>
-                        <p className="text-sm font-semibold text-slate-800">{c.name}</p>
+                        <p className="text-sm font-bold text-slate-800">{c.name}</p>
                         <p className="text-xs text-slate-400">{c.ageGroup}</p>
                       </div>
                     </div>
-                    <div className="col-span-4 text-xs text-slate-400 italic">
-                      {classSubjectsMap[c.id] !== undefined ? `${csubs.length} subject${csubs.length !== 1 ? "s" : ""}` : "Click to load"}
+                    <div className="flex items-center gap-3">
+                      {loaded && (
+                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${csubs.length > 0 ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-500"}`}>
+                          {csubs.length} subject{csubs.length !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                      {!loaded && <span className="text-xs text-slate-400 italic">Click to load</span>}
+                      {isOpen
+                        ? <ChevronDown className="w-4 h-4 text-blue-500 shrink-0" />
+                        : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />}
                     </div>
-                    <div className="col-span-3" />
-                    <div className="col-span-2" />
                   </button>
 
-                  {/* Subject rows */}
+                  {/* Expanded subject panel */}
                   {isOpen && (
-                    <>
-                      {filteredSubs.map((s) => (
-                        <div key={s.id} className="grid grid-cols-12 items-center px-6 py-2.5 bg-slate-50 border-t border-slate-100">
-                          <div className="col-span-3" />
-                          <div className="col-span-4 text-sm text-slate-800">{s.name}</div>
-                          <div className="col-span-3 text-xs text-slate-400">{s.code ?? "—"}</div>
-                          <div className="col-span-2 flex justify-end">
-                            <button
-                              disabled={removingSubjectId === s.id}
-                              onClick={async () => {
-                                if (!confirm(`Remove ${s.name} from ${c.name}?`)) return;
-                                setRemovingSubjectId(s.id);
-                                try {
-                                  const remaining = csubs.filter((x) => x.id !== s.id);
-                                  await setClassSubjectsFn({ data: { classId: c.id, subjectIds: remaining.map((x) => x.id) } });
-                                  setClassSubjectsMap((prev) => ({ ...prev, [c.id]: remaining }));
-                                  toast(`${s.name} removed`, "success");
-                                } catch { toast("Failed to remove", "error"); }
-                                finally { setRemovingSubjectId(null); }
-                              }}
-                              className="p-1.5 text-red-400 hover:text-red-600 transition"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+                    <div className="border-t border-slate-100 px-5 pb-5 pt-4">
+                      {/* Subject list */}
+                      {filteredSubs.length > 0 && (
+                        <div className="space-y-2 mb-4">
+                          {filteredSubs.map((s) => (
+                            <div key={s.id} className={`rounded-xl border transition-all ${editingSubjectId === s.id ? "border-amber-300 bg-amber-50" : "border-slate-100 bg-slate-50 hover:bg-slate-100"}`}>
+                              {editingSubjectId === s.id ? (
+                                /* ── Inline edit row ── */
+                                <div className="flex items-center gap-2 p-2.5">
+                                  <div className="flex-1">
+                                    <input
+                                      autoFocus
+                                      value={editSubjectForm.name}
+                                      onChange={(e) => setEditSubjectForm((p) => ({ ...p, name: e.target.value }))}
+                                      placeholder="Subject name *"
+                                      className={inputCls}
+                                    />
+                                  </div>
+                                  <div className="w-28">
+                                    <input
+                                      value={editSubjectForm.code}
+                                      onChange={(e) => setEditSubjectForm((p) => ({ ...p, code: e.target.value }))}
+                                      placeholder="Code"
+                                      className={inputCls}
+                                    />
+                                  </div>
+                                  <button
+                                    disabled={savingEditSubject || !editSubjectForm.name.trim()}
+                                    onClick={async () => {
+                                      setSavingEditSubject(true);
+                                      try {
+                                        await manageSubjectFn({ data: { id: s.id, name: editSubjectForm.name.trim(), code: editSubjectForm.code.trim() } });
+                                        const allSubs: any[] = await listSubjectsFn({ data: { schoolId: tenant.schoolId } }) as any[];
+                                        setSubjects(allSubs);
+                                        setClassSubjectsMap((prev) => ({
+                                          ...prev,
+                                          [c.id]: (prev[c.id] ?? []).map((x) => x.id === s.id ? { ...x, name: editSubjectForm.name.trim(), code: editSubjectForm.code.trim() || null } : x),
+                                        }));
+                                        setEditingSubjectId(null);
+                                        toast("Subject updated", "success");
+                                      } catch (err: any) { toast(err?.message ?? "Failed", "error"); }
+                                      finally { setSavingEditSubject(false); }
+                                    }}
+                                    className="px-3 py-2 bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300 text-white text-xs font-semibold rounded-lg flex items-center gap-1 shrink-0"
+                                  >
+                                    <Save className="w-3 h-3" /> {savingEditSubject ? "Saving…" : "Save"}
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingSubjectId(null)}
+                                    className="p-2 text-slate-400 hover:text-slate-600 transition rounded-lg hover:bg-slate-200"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              ) : (
+                                /* ── Display row ── */
+                                <div className="flex items-center gap-3 px-3.5 py-2.5 group">
+                                  <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0">
+                                    <BookOpen className="w-3.5 h-3.5 text-blue-500" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-semibold text-slate-800 leading-tight">{s.name}</p>
+                                    {s.code && <p className="text-[11px] text-slate-400 font-mono mt-0.5">{s.code}</p>}
+                                  </div>
+                                  {s.code && (
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 bg-white border border-slate-200 px-2 py-0.5 rounded-md shrink-0">
+                                      {s.code}
+                                    </span>
+                                  )}
+                                  {isAdmin && (
+                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <button
+                                        onClick={() => { setEditingSubjectId(s.id); setEditSubjectForm({ name: s.name, code: s.code ?? "" }); }}
+                                        title="Edit subject"
+                                        className="p-1.5 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                                      >
+                                        <Pencil className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        disabled={removingSubjectId === s.id}
+                                        onClick={async () => {
+                                          if (!confirm(`Remove ${s.name} from ${c.name}?`)) return;
+                                          setRemovingSubjectId(s.id);
+                                          try {
+                                            const remaining = csubs.filter((x) => x.id !== s.id);
+                                            await setClassSubjectsFn({ data: { classId: c.id, subjectIds: remaining.map((x) => x.id) } });
+                                            setClassSubjectsMap((prev) => ({ ...prev, [c.id]: remaining }));
+                                            toast(`${s.name} removed`, "success");
+                                          } catch { toast("Failed to remove", "error"); }
+                                          finally { setRemovingSubjectId(null); }
+                                        }}
+                                        title="Remove subject"
+                                        className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                                      >
+                                        {removingSubjectId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      )}
 
                       {/* Empty state */}
                       {csubs.length === 0 && !isAddingHere && (
-                        <div className="grid grid-cols-12 px-6 py-2.5 bg-slate-50 border-t border-slate-100">
-                          <div className="col-span-3" />
-                          <div className="col-span-9 text-xs text-slate-400 italic">No subjects yet.</div>
+                        <div className="flex flex-col items-center justify-center py-6 rounded-xl border-2 border-dashed border-slate-200 mb-4">
+                          <BookOpen className="w-8 h-8 text-slate-300 mb-2" />
+                          <p className="text-sm text-slate-400 font-medium">No subjects yet</p>
+                          <p className="text-xs text-slate-300 mt-0.5">Add the first subject for {c.name}</p>
                         </div>
                       )}
 
                       {/* Inline add row */}
                       {isAddingHere ? (
-                        <div className="grid grid-cols-12 items-center gap-2 px-6 py-2.5 bg-blue-50 border-t border-blue-100">
-                          <div className="col-span-3" />
-                          <div className="col-span-4">
-                            <input
-                              autoFocus
-                              value={newSubjectForm.name}
-                              onChange={(e) => setNewSubjectForm((p) => ({ ...p, name: e.target.value }))}
-                              placeholder="Subject name *"
-                              className={inputCls}
-                            />
-                          </div>
-                          <div className="col-span-2">
-                            <input
-                              value={newSubjectForm.code}
-                              onChange={(e) => setNewSubjectForm((p) => ({ ...p, code: e.target.value }))}
-                              placeholder="Code"
-                              className={inputCls}
-                            />
-                          </div>
-                          <div className="col-span-3 flex gap-2 justify-end">
+                        <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+                          <p className="text-xs font-semibold text-blue-700 mb-2.5">New subject</p>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1">
+                              <input
+                                autoFocus
+                                value={newSubjectForm.name}
+                                onChange={(e) => setNewSubjectForm((p) => ({ ...p, name: e.target.value }))}
+                                placeholder="Subject name *"
+                                className={inputCls + " bg-white"}
+                                onKeyDown={(e) => e.key === "Enter" && !savingNewSubject && document.getElementById(`add-sub-${c.id}`)?.click()}
+                              />
+                            </div>
+                            <div className="w-28">
+                              <input
+                                value={newSubjectForm.code}
+                                onChange={(e) => setNewSubjectForm((p) => ({ ...p, code: e.target.value }))}
+                                placeholder="Code (e.g. MATH)"
+                                className={inputCls + " bg-white"}
+                              />
+                            </div>
                             <button
+                              id={`add-sub-${c.id}`}
                               disabled={savingNewSubject || !newSubjectForm.name.trim()}
                               onClick={async () => {
                                 setSavingNewSubject(true);
@@ -291,32 +379,27 @@ function AcademicsPage() {
                                 } catch (err: any) { toast(err?.message ?? "Failed", "error"); }
                                 finally { setSavingNewSubject(false); }
                               }}
-                              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-xs font-semibold rounded-lg"
+                              className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-xs font-semibold rounded-lg flex items-center gap-1 shrink-0"
                             >
-                              {savingNewSubject ? "Adding…" : "Add"}
+                              <Plus className="w-3.5 h-3.5" /> {savingNewSubject ? "Adding…" : "Add"}
                             </button>
                             <button
                               onClick={() => { setAddingSubjectForClass(null); setNewSubjectForm({ name: "", code: "" }); }}
-                              className="px-3 py-1.5 border border-slate-200 bg-white text-slate-500 text-xs rounded-lg hover:bg-slate-100"
+                              className="p-2 text-slate-400 hover:text-slate-600 transition rounded-lg hover:bg-blue-100"
                             >
-                              Cancel
+                              <X className="w-4 h-4" />
                             </button>
                           </div>
                         </div>
                       ) : isAdmin ? (
-                        <div className="grid grid-cols-12 px-6 py-2.5 bg-slate-50 border-t border-slate-100">
-                          <div className="col-span-3" />
-                          <div className="col-span-9">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setAddingSubjectForClass(c.id); setNewSubjectForm({ name: "", code: "" }); }}
-                              className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-semibold transition"
-                            >
-                              <Plus className="w-3.5 h-3.5" /> Add subject
-                            </button>
-                          </div>
-                        </div>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setAddingSubjectForClass(c.id); setNewSubjectForm({ name: "", code: "" }); setEditingSubjectId(null); }}
+                          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 text-sm font-semibold transition"
+                        >
+                          <Plus className="w-4 h-4" /> Add subject
+                        </button>
                       ) : null}
-                    </>
+                    </div>
                   )}
                 </div>
               );
