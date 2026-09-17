@@ -55,13 +55,8 @@ export function usePush() {
     };
 
     run().catch((e: any) => {
-      console.error("Push subscription failed", e);
-      Swal.fire({
-        icon: "error",
-        title: "Push notifications",
-        text: "Could not enable push notifications. Please contact the support team if this issue continues.",
-        confirmButtonText: "OK",
-      });
+      // Push subscription is non-critical — log silently, never show a user-facing error
+      console.warn("Push subscription failed (non-critical):", e);
     });
   }, [getKey, subscribe]);
 }
