@@ -203,6 +203,7 @@ function InquiryDrawer({
   const sendInviteFn = useServerFn(sendParentInvite);
   const enrollFn = useServerFn(enrollFromAdmission);
   const listClassesFn = useServerFn(listClassesForSchool);
+  const toast = useToast();
   const [inquiry, setInquiry] = useState<Inquiry>(initial);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -315,7 +316,7 @@ function InquiryDrawer({
       setInquiry(updated);
       setEf((p) => ({ ...p, status: newStatus }));
       onUpdated(updated);
-    } catch { /* silent */ }
+    } catch (err: any) { toast(err?.message ?? "Failed to update status", "error"); }
     finally { setStatusSaving(false); }
   };
 

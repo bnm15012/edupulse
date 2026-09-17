@@ -7627,7 +7627,7 @@ export const deleteSchoolAnnouncement = createServerFn({ method: "POST" })
 
 // ── SCHOOL BOARD ──────────────────────────────────────────────────────────────
 
-const setSchoolBoardSchema = z.object({ schoolId: z.number(), board: z.enum(["preschool", "CBSE", "ICSE"]) });
+const setSchoolBoardSchema = z.object({ schoolId: z.number(), board: z.enum(["preschool", "generic", "CBSE", "ICSE", "State Board", "IB", "IGCSE"]) });
 export const setSchoolBoard = createServerFn({ method: "POST" })
   .validator((i: unknown) => setSchoolBoardSchema.parse(i))
   .handler(async ({ data }) => {
@@ -7648,7 +7648,7 @@ export const getSchoolBoard = createServerFn({ method: "GET" })
     const { db } = await import("@/lib/db");
     const { schools } = await import("@/lib/db/schema");
     const [s] = await db.select({ board: schools.board }).from(schools).where(eq(schools.id, data.schoolId)).limit(1);
-    return s?.board ?? "preschool";
+    return s?.board ?? "generic";
   });
 
 // ── GRADING SCALES ────────────────────────────────────────────────────────────
@@ -7716,7 +7716,7 @@ export const deleteGradingScale = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-const seedDefaultScalesSchema = z.object({ board: z.enum(["preschool", "CBSE", "ICSE"]) });
+const seedDefaultScalesSchema = z.object({ board: z.enum(["preschool", "generic", "CBSE", "ICSE", "State Board", "IB", "IGCSE"]) });
 
 // Seed default grading scales for the selected board
 export const seedDefaultGradingScales = createServerFn({ method: "POST" })

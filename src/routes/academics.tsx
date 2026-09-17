@@ -80,8 +80,8 @@ function AcademicsPage() {
   const [ttForm, setTtForm] = useState<{ id?: number; dayOfWeek: number; periodNumber: number; startTime: string; endTime: string; subjectId: number; teacherId: number } | null>(null);
 
   // Grading / board
-  const ALLOWED_BOARDS = ["preschool", "CBSE", "ICSE"];
-  const [schoolBoard, setSchoolBoardValue] = useState<string>("preschool");
+  const ALLOWED_BOARDS = ["preschool", "generic", "CBSE", "ICSE", "State Board", "IB", "IGCSE"];
+  const [schoolBoard, setSchoolBoardValue] = useState<string>("generic");
   type Scale = { id: number; board: string; name: string; minPercentage: string | number; maxPercentage: string | number; gradePoint: string | number | null };
   const [gradingScalesList, setGradingScalesList] = useState<Scale[]>([]);
   const [scaleForm, setScaleForm] = useState<{ id?: number; name: string; minPercentage: string; maxPercentage: string; gradePoint: string } | null>(null);
@@ -476,10 +476,14 @@ function AcademicsPage() {
             <h2 className="text-base font-bold text-slate-800 mb-3">School Board</h2>
             <div className="flex items-center gap-3">
               {isAdmin ? (
-                <select value={schoolBoard} onChange={(e) => setSchoolBoardValue(e.target.value)} className={inputCls + " w-48 bg-white"}>
+                <select value={schoolBoard} onChange={(e) => setSchoolBoardValue(e.target.value)} className={inputCls + " w-56 bg-white"}>
                   <option value="preschool">Preschool (no exams/marks)</option>
+                  <option value="generic">Generic / Other</option>
                   <option value="CBSE">CBSE</option>
                   <option value="ICSE">ICSE</option>
+                  <option value="State Board">State Board</option>
+                  <option value="IB">IB</option>
+                  <option value="IGCSE">IGCSE</option>
                 </select>
               ) : (
                 <span className="px-3 py-1.5 bg-blue-100 text-blue-700 text-sm font-bold rounded-lg uppercase tracking-wide">{schoolBoard}</span>
