@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Calendar, Clock, Save, Loader2, Baby } from "lucide-react";
+import { Baby, Calendar, Clock, Loader2, Save, Search } from "lucide-react";
 import { listDaycareSessions, saveDaycareSessions, listClassesForSchool } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { useToast } from "@/lib/toast";
@@ -57,13 +57,26 @@ function DaycarePage() {
   const [date, setDate] = useState(todayIST());
   const [classes, setClasses] = useState<ClassOption[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<number | "all">("all");
+  const [search, setSearch] = useState("");
   const [rows, setRows] = useState<SessionRow[]>([]);
   const [facilityType, setFacilityType] = useState("school");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const PAGE_SIZE = 20;
-  const { pageItems, currentPage, setCurrentPage, totalPages } = usePagination(rows, PAGE_SIZE);
+
+  // Client-side search filter on student name or class name
+  const filteredRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(
+      (r) =>
+        `${r.firstName} ${r.lastName}`.toLowerCase().includes(q) ||
+        (r.className ?? "").toLowerCase().includes(q),
+    );
+  }, [rows, search]);
+
+  const { pageItems, currentPage, setCurrentPage, totalPages } = usePagination(filteredRows, PAGE_SIZE);
 
   useEffect(() => {
     classesFn({ data: { schoolId: tenant.schoolId, locationId: tenant.locationId } })
@@ -144,44 +157,42 @@ function DaycarePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 flex items-center gap-2">
-            <Baby className="w-6 h-6 text-blue-600" />
-            Daycare
-          </h1>
-          <p className="text-sm text-slate-500 mt-0.5">Record in/out times and track daycare hours</p>
-        </div>
-        <button
-          onClick={save}
-          disabled={saving}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-semibold rounded-xl transition shadow-sm"
-        >
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          Save
-        </button>
+      {/* Page header */}
+      <div>
+        <h1 className="text-2xl font-extrabold text-slate-900 flex items-center gap-2">
+          <Baby className="w-6 h-6 text-blue-600" />
+          Daycare
+        </h1>
+        <p className="text-sm text-slate-500 mt-0.5">Record in/out times and track daycare hours</p>
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-4">
-        <div className="flex flex-wrap items-end gap-4">
-          <div>
+        {/* Toolbar: date + class on left, search + save on right */}
+        <div className="flex flex-wrap items-end gap-3">
+          {/* Date picker */}
+          <div className="flex-none">
             <label className="block text-xs font-semibold text-slate-600 mb-1.5">Date</label>
             <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
               <input
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className={`${inputCls} pl-9`}
+                className="pl-9 pr-3 py-2 rounded-lg border border-slate-200 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm transition"
               />
             </div>
           </div>
-          <div>
+
+          {/* Class filter */}
+          <div className="flex-none min-w-[160px]">
             <label className="block text-xs font-semibold text-slate-600 mb-1.5">Class</label>
             <select
               value={selectedClassId}
-              onChange={(e) => setSelectedClassId(e.target.value === "all" ? "all" : Number(e.target.value))}
-              className={inputCls}
+              onChange={(e) => {
+                setSelectedClassId(e.target.value === "all" ? "all" : Number(e.target.value));
+                setSearch("");
+              }}
+              className="px-3 py-2 rounded-lg border border-slate-200 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm transition w-full"
             >
               <option value="all">All classes</option>
               {classes.map((c) => (
@@ -190,9 +201,54 @@ function DaycarePage() {
             </select>
           </div>
 
+          {/* Search — grows to fill remaining space */}
+          <div className="flex-1 min-w-[180px]">
+            <label className="block text-xs font-semibold text-slate-600 mb-1.5">Search student</label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+                placeholder="Search by name or class…"
+                className="pl-9 pr-3 py-2 rounded-lg border border-slate-200 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm transition w-full"
+              />
+            </div>
+          </div>
+
+          {/* Save button — right-aligned */}
+          <div className="flex-none ml-auto">
+            <label className="block text-xs font-semibold text-transparent mb-1.5 select-none">Save</label>
+            <button
+              onClick={save}
+              disabled={saving}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-semibold rounded-lg transition shadow-sm"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              Save sessions
+            </button>
+          </div>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Summary counts */}
+        {!loading && rows.length > 0 && (
+          <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 border-t border-slate-100 pt-3">
+            <span className="font-semibold text-slate-700">{rows.length} student{rows.length !== 1 ? "s" : ""}</span>
+            <span>·</span>
+            <span>{rows.filter((r) => r.inTime).length} checked in</span>
+            <span>·</span>
+            <span>{rows.filter((r) => r.inTime && r.outTime).length} checked out</span>
+            {search && (
+              <>
+                <span>·</span>
+                <span className="text-blue-600 font-medium">{filteredRows.length} matching "{search}"</span>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Table */}
+        <div className="overflow-x-auto rounded-xl border border-slate-200">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
@@ -214,10 +270,10 @@ function DaycarePage() {
                     Loading…
                   </td>
                 </tr>
-              ) : !rows.length ? (
+              ) : !filteredRows.length ? (
                 <tr>
                   <td colSpan={8} className="px-4 py-10 text-center text-slate-400">
-                    No students found for the selected class.
+                    {search ? `No students matching "${search}"` : "No students found for the selected class."}
                   </td>
                 </tr>
               ) : (
@@ -272,11 +328,12 @@ function DaycarePage() {
             </tbody>
           </table>
         </div>
+
         <Pagination
           currentPage={currentPage}
           totalPages={totalPages}
           onPageChange={setCurrentPage}
-          totalItems={rows.length}
+          totalItems={filteredRows.length}
           pageSize={PAGE_SIZE}
         />
       </div>
