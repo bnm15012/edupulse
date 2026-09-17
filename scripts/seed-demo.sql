@@ -32,6 +32,7 @@ TRUNCATE TABLE class_enrollments;
 TRUNCATE TABLE class_subjects;
 TRUNCATE TABLE classes;
 TRUNCATE TABLE curriculum_activities;
+TRUNCATE TABLE daycare_sessions;
 TRUNCATE TABLE documents;
 TRUNCATE TABLE emergency_contacts;
 TRUNCATE TABLE exam_subjects;
