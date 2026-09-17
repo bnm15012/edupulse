@@ -4053,13 +4053,17 @@ export const sendParentPortalInvite = createServerFn({ method: "POST" })
 
     const email = normalizeEmail(parent.email);
 
+    // Look up the student to get schoolId (needed for user row)
+    const [studentRow] = await db.select({ firstName: students.firstName, schoolId: students.schoolId }).from(students).where(eq(students.id, parent.studentId!)).limit(1);
+    const schoolId = studentRow?.schoolId ?? session.schoolId;
+
     // Find or create user account
     let userId: number;
     const [existingUser] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
     if (existingUser) {
       userId = existingUser.id;
     } else {
-      const [r] = await db.insert(users).values({ email, role: "parent", status: "pending" } as any);
+      const [r] = await db.insert(users).values({ email, schoolId, role: "parent", status: "invited" } as any);
       userId = Number((r as any).insertId);
     }
 
@@ -4075,8 +4079,7 @@ export const sendParentPortalInvite = createServerFn({ method: "POST" })
     if (process.env.SKIP_INVITE_EMAIL !== "true") {
       const appUrl = process.env.APP_URL ?? process.env.VITE_APP_URL ?? "https://edupulse.vercel.app";
       const inviteUrl = `${appUrl}/invite?token=${inviteToken}`;
-      const [studentRow] = await db.select({ firstName: students.firstName, schoolId: students.schoolId }).from(students).where(eq(students.id, parent.studentId!)).limit(1);
-      const [schoolRow] = await db.select({ name: schools.name }).from(schools).where(eq(schools.id, studentRow?.schoolId ?? session.schoolId)).limit(1);
+      const [schoolRow] = await db.select({ name: schools.name }).from(schools).where(eq(schools.id, schoolId)).limit(1);
       const schoolName = schoolRow?.name ?? "Your School";
       try {
         await sendParentInviteEmail(email, inviteUrl, schoolName, studentRow?.firstName ?? "your child");

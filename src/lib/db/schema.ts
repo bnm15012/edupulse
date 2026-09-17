@@ -543,7 +543,7 @@ export const gradingScales = mysqlTable("grading_scales", {
   name: varchar("name", { length: 50 }).notNull(),   // e.g. "A1", "A+", "First"
   minPercentage: decimal("min_percentage", { precision: 5, scale: 2 }).notNull(),
   maxPercentage: decimal("max_percentage", { precision: 5, scale: 2 }).notNull(),
-  gradePoint: decimal("grade_point", { precision: 3, scale: 2 }),
+  gradePoint: decimal("grade_point", { precision: 4, scale: 2 }),
   createdAt: timestamp("created_at").defaultNow(),
 }, (t) => ({
   uniqueGradeScale: uniqueIndex("grading_scales_school_board_name").on(t.schoolId, t.board, t.name),
