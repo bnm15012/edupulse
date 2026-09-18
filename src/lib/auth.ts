@@ -1927,6 +1927,21 @@ export const toggleSchoolDaycare = createServerFn({ method: "POST" })
     const [sub] = await db.select({ id: subscriptions.id }).from(subscriptions).where(eq(subscriptions.schoolId, data.schoolId)).limit(1);
     if (!sub) throw new Error("No subscription found for this school");
     await db.update(subscriptions).set({ daycareEnabled: data.enabled ? 1 : 0 }).where(eq(subscriptions.id, sub.id));
+
+    // When enabling daycare, upgrade all "school"-only branches to "both" so the
+    // sidebar Daycare menu appears without requiring a manual SQL fix.
+    // When disabling, revert "both" branches back to "school" (leaves pure "daycare" branches alone).
+    const { locations } = await import("@/lib/db/schema");
+    if (data.enabled) {
+      await db.update(locations)
+        .set({ facilityType: "both" })
+        .where(and(eq(locations.schoolId, data.schoolId), eq(locations.facilityType, "school")));
+    } else {
+      await db.update(locations)
+        .set({ facilityType: "school" })
+        .where(and(eq(locations.schoolId, data.schoolId), eq(locations.facilityType, "both")));
+    }
+
     return { ok: true, daycareEnabled: data.enabled };
   });
 
