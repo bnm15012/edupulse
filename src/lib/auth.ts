@@ -8340,7 +8340,9 @@ function getPlatformRazorpayKeys() {
   return { keyId, keySecret };
 }
 
-export const getSchoolSubscriptionBilling = createServerFn({ method: "GET" }).handler(async () => {
+export const getSchoolSubscriptionBilling = createServerFn({ method: "GET" })
+  .validator((input: unknown) => z.object({ schoolId: z.number().optional() }).parse(input))
+  .handler(async ({ data }) => {
   const userId = await requireSession();
   const { db } = await import("@/lib/db");
   const { users, schools, subscriptions, plans } = await import("@/lib/db/schema");
@@ -8349,13 +8351,16 @@ export const getSchoolSubscriptionBilling = createServerFn({ method: "GET" }).ha
   if (!me) throw new Error("Not authenticated");
   if (me.role !== "school_admin" && me.role !== "super_admin") throw new Error("Not authorized");
 
+  // Super-admin impersonating a school: use the passed schoolId, not their own
+  const targetSchoolId = (me.role === "super_admin" && data.schoolId) ? data.schoolId : me.schoolId;
+
   const [school] = await db.select({
     id: schools.id,
     name: schools.name,
     email: schools.email,
     plan: schools.plan,
     status: schools.status,
-  }).from(schools).where(eq(schools.id, me.schoolId)).limit(1);
+  }).from(schools).where(eq(schools.id, targetSchoolId)).limit(1);
   if (!school) throw new Error("School not found");
 
   const [sub] = await db.select().from(subscriptions).where(eq(subscriptions.schoolId, school.id)).limit(1);

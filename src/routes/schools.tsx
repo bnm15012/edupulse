@@ -453,7 +453,7 @@ function SubscriptionBilling({ schoolId }: { schoolId: number }) {
   const load = () => {
     setLoading(true);
     setError("");
-    getBillingFn()
+    getBillingFn({ data: { schoolId } })
       .then((d) => setData(d as BillingData))
       .catch((e) => setError(e?.message ?? "Failed to load billing"))
       .finally(() => setLoading(false));
