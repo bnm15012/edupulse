@@ -11,7 +11,7 @@ import {
   updateEmergencyContact, addEmergencyContact,
   uploadDocument, listDocuments, deleteDocument,
   getStudentAttendanceSummary, uploadReportCard, listReportCards, deleteReportCard,
-  promoteStudent, getSession, updateParent, sendParentPortalInvite,
+  promoteStudent, getSession, updateParent, addParent, sendParentPortalInvite,
 } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { useToast } from "@/lib/toast";
@@ -176,11 +176,14 @@ function StudentDetailPage() {
 
   // Per-parent inline editing state
   const updateParentFn = useServerFn(updateParent);
+  const addParentFn = useServerFn(addParent);
   const sendInviteFn = useServerFn(sendParentPortalInvite);
   const [parentEditing, setParentEditing] = useState<number | null>(null);
   const [parentForm, setParentForm] = useState({ name: "", phone: "", email: "", relation: "" });
   const [parentSaving, setParentSaving] = useState(false);
   const [parentInviting, setParentInviting] = useState<number | null>(null);
+  const [addingParent, setAddingParent] = useState(false);
+  const [newParentForm, setNewParentForm] = useState({ name: "", phone: "", email: "", relation: "guardian" });
 
   // Emergency contact inline editing
   const [ecEditing, setEcEditing] = useState<number | "new" | null>(null);
@@ -570,7 +573,59 @@ function StudentDetailPage() {
                           </div>
                         )}
                       </div>
-                    )) : (
+                    )) : null}
+
+                    {/* Add parent */}
+                    {isAdmin && !addingParent && (
+                      <button onClick={() => { setAddingParent(true); setNewParentForm({ name: "", phone: "", email: "", relation: "guardian" }); }}
+                        className="flex items-center gap-1.5 text-xs font-semibold text-violet-600 hover:text-violet-700 border border-dashed border-violet-300 hover:border-violet-400 rounded-xl px-4 py-2.5 w-full justify-center transition">
+                        <Plus className="w-3.5 h-3.5" /> Add parent / guardian
+                      </button>
+                    )}
+                    {addingParent && (
+                      <div className="border border-violet-200 rounded-xl p-4 bg-violet-50/40 space-y-3">
+                        <p className="text-xs font-bold text-violet-700">New parent / guardian</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[10px] font-semibold text-slate-500 mb-1">Name *</label>
+                            <input value={newParentForm.name} onChange={(e) => setNewParentForm(f => ({ ...f, name: e.target.value }))} className={inputCls} placeholder="Full name" />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-slate-500 mb-1">Relation</label>
+                            <select value={newParentForm.relation} onChange={(e) => setNewParentForm(f => ({ ...f, relation: e.target.value }))} className={selectCls}>
+                              <option value="father">Father</option>
+                              <option value="mother">Mother</option>
+                              <option value="guardian">Guardian</option>
+                              <option value="other">Other</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-slate-500 mb-1">Phone</label>
+                            <input value={newParentForm.phone} onChange={(e) => setNewParentForm(f => ({ ...f, phone: e.target.value }))} className={inputCls} placeholder="Phone number" />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-slate-500 mb-1">Email</label>
+                            <input type="email" value={newParentForm.email} onChange={(e) => setNewParentForm(f => ({ ...f, email: e.target.value }))} className={inputCls} placeholder="Email address" />
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button disabled={parentSaving || !newParentForm.name.trim()} onClick={async () => {
+                            setParentSaving(true);
+                            try {
+                              await addParentFn({ data: { studentId: Number(studentId), schoolId: tenant.schoolId, locationId: tenant.locationId, name: newParentForm.name, phone: newParentForm.phone || undefined, email: newParentForm.email || undefined, relation: newParentForm.relation as any } });
+                              load(); setAddingParent(false);
+                              toast("Parent added", "success");
+                            } catch (err: any) { toast(err?.message ?? "Failed to add parent", "error"); }
+                            finally { setParentSaving(false); }
+                          }} className="px-3 py-1.5 text-xs font-bold bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition disabled:opacity-60">
+                            {parentSaving ? "Saving…" : "Save parent"}
+                          </button>
+                          <button onClick={() => setAddingParent(false)} className="px-3 py-1.5 text-xs font-medium border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition">Cancel</button>
+                        </div>
+                      </div>
+                    )}
+
+                    {!detail?.parents.length && !addingParent && (
                       <p className="text-sm text-slate-400">No parent records found.</p>
                     )}
                   </div>

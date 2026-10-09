@@ -4051,6 +4051,53 @@ export const updateParent = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+// ── Add a parent record to an existing student ────────────────────────────────
+const addParentSchema = z.object({
+  studentId: z.number(),
+  schoolId:  z.number(),
+  locationId: z.number(),
+  name:     z.string().trim().min(1).max(255),
+  phone:    z.string().trim().max(50).optional(),
+  email:    z.string().trim().email().max(255).optional().or(z.literal("")),
+  relation: z.enum(["mother","father","guardian","other"]).default("guardian"),
+  isPrimary: z.boolean().optional(),
+});
+
+export const addParent = createServerFn({ method: "POST" })
+  .validator((input: unknown) => addParentSchema.parse(input))
+  .handler(async ({ data }) => {
+    await requireAuth(data.schoolId, data.locationId);
+    await assertCanOperateForUser();
+    const { db } = await import("@/lib/db");
+    const { parents, students } = await import("@/lib/db/schema");
+
+    // Verify the student belongs to this school+location
+    const [student] = await db.select({ id: students.id })
+      .from(students)
+      .where(and(eq(students.id, data.studentId), eq(students.schoolId, data.schoolId), eq(students.locationId, data.locationId)))
+      .limit(1);
+    if (!student) throw new Error("Student not found");
+
+    // If marking as primary, unflag all existing parents for this student
+    if (data.isPrimary) {
+      await db.update(parents).set({ isPrimary: 0 })
+        .where(eq(parents.studentId, data.studentId));
+    }
+
+    const [res] = await db.insert(parents).values({
+      schoolId:   data.schoolId,
+      locationId: data.locationId,
+      studentId:  data.studentId,
+      name:       data.name,
+      phone:      data.phone   || null,
+      email:      data.email   ? normalizeEmail(data.email) : null,
+      relation:   data.relation,
+      isPrimary:  data.isPrimary ? 1 : 0,
+      isEmergency: 0,
+    });
+    return { ok: true, parentId: Number((res as any).insertId) };
+  });
+
 // ── Send / resend portal invite for a parent by parentId ─────────────────────
 const sendParentPortalInviteSchema = z.object({ parentId: z.number() });
 
