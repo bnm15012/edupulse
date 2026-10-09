@@ -2179,6 +2179,19 @@ export const listStudents = createServerFn({ method: "GET" })
       .where(and(eq(students.schoolId, data.schoolId), eq(students.locationId, data.locationId)))
       .orderBy(asc(students.firstName));
 
+    // Backfill admission_number for students saved before it was implemented
+    const needsBackfill = rows.filter((s) => !s.admissionNumber);
+    if (needsBackfill.length) {
+      const { schools } = await import("@/lib/db/schema");
+      const [schoolRow] = await db.select({ name: schools.name }).from(schools).where(eq(schools.id, data.schoolId)).limit(1);
+      const schoolName = schoolRow?.name ?? "School";
+      await Promise.all(needsBackfill.map(async (s) => {
+        const generated = generateAdmissionNumber(schoolName, s.id);
+        await db.update(students).set({ admissionNumber: generated }).where(eq(students.id, s.id));
+        s.admissionNumber = generated;
+      }));
+    }
+
     // Attach primary parent and current class name for list view
     const enriched = await Promise.all(
       rows.map(async (s) => {
@@ -2252,6 +2265,7 @@ export const getStudent = createServerFn({ method: "GET" })
       .select({
         id: students.id,
         admissionNumber: students.admissionNumber,
+        schoolId: students.schoolId,
         firstName: students.firstName,
         lastName: students.lastName,
         dateOfBirth: students.dateOfBirth,
@@ -2265,6 +2279,15 @@ export const getStudent = createServerFn({ method: "GET" })
       .where(eq(students.id, data.studentId))
       .limit(1);
     if (!student) throw new Error("Student not found");
+
+    // Backfill admission_number for students saved before it was implemented
+    if (!student.admissionNumber) {
+      const { schools } = await import("@/lib/db/schema");
+      const [schoolRow] = await db.select({ name: schools.name }).from(schools).where(eq(schools.id, student.schoolId)).limit(1);
+      const generated = generateAdmissionNumber(schoolRow?.name ?? "School", student.id);
+      await db.update(students).set({ admissionNumber: generated }).where(eq(students.id, student.id));
+      student.admissionNumber = generated;
+    }
 
     const studentParents = await db
       .select({
