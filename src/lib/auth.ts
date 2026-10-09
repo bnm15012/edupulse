@@ -2499,7 +2499,7 @@ export const addStudent = createServerFn({ method: "POST" })
     await requireAuth(data.schoolId, data.locationId);
     await assertCanOperateForUser();
     const { db } = await import("@/lib/db");
-    const { students, parents, emergencyContacts, medicalNotes } = await import("@/lib/db/schema");
+    const { students, parents, emergencyContacts, medicalNotes, schools } = await import("@/lib/db/schema");
 
     // Plan limit guard
     await checkPlanLimit(data.schoolId, "students");
